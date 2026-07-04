@@ -1,11 +1,11 @@
 # NetTopo AI
 
 **AI-powered network topology designer & planner** for network engineers and CS students.
-Describe a network in **Arabic or English**, upload a diagram, or build it manually -- and get a
+Describe a network in **Arabic or English** or build it manually -- and get a
 professional topology diagram plus a complete IP / subnetting / VLAN / routing / security plan.
 
 > أداة لتصميم وتخطيط شبكات الحاسوب بالذكاء الاصطناعي. اوصف الشبكة بالعربي او الانجليزي،
-> ارفع صورة للرسمة، او ابنيها يدوياً — واحصل على داياجرام احترافي + خطة IP و VLAN و Routing كاملة.
+>  او ابنيها يدوياً — واحصل على داياجرام احترافي + خطة IP و VLAN و Routing كاملة.
 
 ---
 
@@ -19,7 +19,6 @@ professional topology diagram plus a complete IP / subnetting / VLAN / routing /
 | Auth | Clerk (free tier) |
 | DB / ORM | Supabase Postgres + Prisma |
 | AI | Gemini -> Hugging Face -> Ollama -> rule-based fallback |
-| OCR | tesseract.js (English + Arabic) |
 | Export | html-to-image + jsPDF (client-side) |
 | Tests | Vitest |
 

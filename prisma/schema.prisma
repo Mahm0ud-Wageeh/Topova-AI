@@ -5,7 +5,7 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL") // Supabase pooled vs direct connection
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
@@ -74,7 +74,6 @@ model NetworkPlan {
 
 enum InputType {
   PROMPT
-  IMAGE
   MANUAL
 }
 
@@ -85,4 +84,8 @@ enum DeviceType {
   PC
   FIREWALL
   AP
+  PRINTER
+  CAMERA
+  NVR
+  IP_PHONE
 }

@@ -1,0 +1,11 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "Run NetTopo + Edge",
+        "type": "shell",
+        "command": "Start-Process msedge.exe http://localhost:3000; npm run dev",
+        "problemMatcher": []
+      }
+    ]
+  }
