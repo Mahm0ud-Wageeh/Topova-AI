@@ -3,10 +3,11 @@ import { Plus, FolderKanban, Cpu, Network, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { DeleteProjectButton } from "@/components/dashboard/delete-project-button";
 import { prisma } from "@/lib/db/prisma";
 import { getDbUser } from "@/lib/auth";
 
-// Server component: lists the signed-in user's saved projects from Supabase.
+// Server component: lists the signed-in user's saved projects.
 export const dynamic = "force-dynamic";
 
 function formatDate(d: Date) {
@@ -26,7 +27,6 @@ export default async function DashboardPage() {
       })
     : [];
 
-  // Real aggregate stats derived from the saved projects (no fake monitoring).
   const totalDevices = projects.reduce(
     (sum, p) => sum + (p.topology?.devices.length ?? 0),
     0,
@@ -52,14 +52,8 @@ export default async function DashboardPage() {
     <div className="space-y-8">
       {/* Header banner */}
       <div className="relative overflow-hidden rounded-xl border bg-card p-6">
-        <div
-          className="pointer-events-none absolute inset-0 cyber-grid"
-          aria-hidden
-        />
-        <div
-          className="pointer-events-none absolute inset-0 brand-glow"
-          aria-hidden
-        />
+        <div className="pointer-events-none absolute inset-0 cyber-grid" aria-hidden />
+        <div className="pointer-events-none absolute inset-0 brand-glow" aria-hidden />
         <div className="relative flex flex-wrap items-center justify-between gap-3">
           <div>
             <Badge variant="ai" className="mb-2">
@@ -71,8 +65,9 @@ export default async function DashboardPage() {
             </p>
           </div>
           <Button asChild>
-              <Link href="/prompt">Create your first network</Link>
-              <Link href="/">Create your first network</Link>
+            <Link href="/">
+              <Plus className="h-4 w-4" /> New project
+            </Link>
           </Button>
         </div>
       </div>
@@ -100,7 +95,7 @@ export default async function DashboardPage() {
           <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
             <p className="text-muted-foreground">No saved projects yet.</p>
             <Button asChild variant="outline">
-              <Link href="/prompt">Create your first network</Link>
+              <Link href="/">Create your first network</Link>
             </Button>
           </CardContent>
         </Card>
@@ -116,7 +111,10 @@ export default async function DashboardPage() {
                     <CardTitle className="text-base group-hover:text-primary">
                       {p.name}
                     </CardTitle>
-                    <Badge variant="secondary">{p.source}</Badge>
+                    <div className="flex items-center gap-1.5">
+                      <Badge variant="secondary">{p.source}</Badge>
+                      <DeleteProjectButton id={p.id} />
+                    </div>
                   </CardHeader>
                   <CardContent className="space-y-3 text-sm text-muted-foreground">
                     <div className="flex flex-wrap gap-3 text-xs">

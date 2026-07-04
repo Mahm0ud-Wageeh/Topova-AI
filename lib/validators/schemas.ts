@@ -29,7 +29,7 @@ export const parseInputSchema = z.object({
 export const createProjectSchema = z.object({
   name: z.string().min(1).max(120),
   description: z.string().max(500).optional(),
-  source: z.enum(["PROMPT", "IMAGE", "MANUAL"]).default("MANUAL"),
+  source: z.enum(["PROMPT", "MANUAL"]).default("MANUAL"),
   prompt: z.string().max(4000).optional(),
 });
 

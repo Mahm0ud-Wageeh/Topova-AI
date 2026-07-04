@@ -13,10 +13,14 @@ import {
   Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toPng } from "html-to-image";
+import { jsPDF } from "jspdf";
 import {
-  WorkspaceTopbar,
+  WorkspaceRail,
   type WorkspaceView,
-} from "@/components/workspace/workspace-topbar";
+} from "@/components/workspace/workspace-rail";
+import { IpPlanView } from "@/components/workspace/ip-plan-view";
+import { SaveProjectDialog } from "@/components/workspace/save-project-dialog";
 import { TopologyBoard } from "@/components/workspace/topology-board";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -37,7 +41,6 @@ import type { Device, GeneratedProject } from "@/lib/network-engine/types";
 import { mockGenerated } from "@/lib/mock";
 
 type InspectorTab = "overview" | "devices" | "cli" | "deploy" | "security";
-
 const INSPECTOR_TABS: { id: InspectorTab; label: string }[] = [
   { id: "overview", label: "Overview" },
   { id: "devices", label: "Devices" },
@@ -56,6 +59,15 @@ function downloadText(filename: string, text: string) {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+}
+
+function downloadDataUrl(filename: string, dataUrl: string) {
+  const a = document.createElement("a");
+  a.href = dataUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 }
 
 async function copyText(text: string, label = "Copied to clipboard") {
@@ -103,16 +115,15 @@ export default function ResultPage() {
   const params = useParams<{ projectId: string }>();
   const projectId = params?.projectId ?? "new";
   const isSaved = projectId !== "new";
-
   const [data, setData] = useState<GeneratedProject | null>(null);
   const [saving, setSaving] = useState(false);
+  const [saveOpen, setSaveOpen] = useState(false);
   const [wsView, setWsView] = useState<WorkspaceView>("network");
   const [tab, setTab] = useState<InspectorTab>("overview");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [resolved, setResolved] = useState<Set<string>>(new Set());
   const [showDiff, setShowDiff] = useState(true);
   const [inspectorOpen, setInspectorOpen] = useState(false);
-
   useEffect(() => {
     let active = true;
     setSelectedId(null);
@@ -135,7 +146,6 @@ export default function ResultPage() {
       active = false;
     };
   }, [isSaved, projectId]);
-
   const topology = useMemo(
     () =>
       data
@@ -169,19 +179,16 @@ export default function ResultPage() {
     () => (topology ? runPreflight(topology, addressing) : []),
     [topology, addressing],
   );
-
   if (!data || !topology)
     return (
       <div className="grid h-screen place-items-center text-muted-foreground">
         Loading workspace...
       </div>
     );
-
   const plan = data.network_plan;
   const activeIssues = allIssues.filter((i) => !resolved.has(i.id));
   const status = statusFromIssues(topology.devices, activeIssues);
   const counts = countStatus(status);
-
   const selectedDevice = selectedId
     ? (topology.devices.find((d) => d.id === selectedId) ?? null)
     : null;
@@ -191,7 +198,6 @@ export default function ResultPage() {
     ? activeIssues.filter((i) => i.deviceId === selectedId)
     : activeIssues;
   const scopePatch = buildPatch(scopeIssues);
-
   const handleSelect = (id: string | null) => {
     setSelectedId(id);
     if (id) {
@@ -201,7 +207,6 @@ export default function ResultPage() {
   };
   const onDownloadCisco = () =>
     cisco && downloadText("nettopo-cisco-config.txt", cisco.combined);
-
   const applyPatch = (ids: string[]) => {
     setResolved((prev) => {
       const next = new Set(prev);
@@ -218,7 +223,6 @@ export default function ResultPage() {
     if (n === 0) toast.success("Pre-flight passed -- no issues found");
     else toast.warning(`Pre-flight found ${n} issue${n === 1 ? "" : "s"}`);
   };
-
   const configFor = (d: Device | null): string => {
     if (!d) return cisco?.combined ?? "";
     const base = configMap.get(d.id)?.cli ?? "";
@@ -229,10 +233,7 @@ export default function ResultPage() {
     const extra = applied.flatMap((i) => i.add).join("\n");
     return `${base}\n!\n! ---- applied hardening patch ----\n${extra}\n`;
   };
-
-  async function onSave() {
-    const name = window.prompt("Project name", "My network");
-    if (!name) return;
+  async function onSave(name: string, description?: string) {
     setSaving(true);
     try {
       const res = await fetch("/api/projects/save", {
@@ -240,6 +241,7 @@ export default function ResultPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name,
+          description,
           source: "PROMPT",
           topology: {
             devices: topology!.devices,
@@ -251,6 +253,7 @@ export default function ResultPage() {
       });
       if (!res.ok) throw new Error("Save failed");
       const { project } = await res.json();
+      setSaveOpen(false);
       toast.success("Project saved");
       router.push(`/result/${project.id}`);
     } catch (e) {
@@ -260,16 +263,64 @@ export default function ResultPage() {
     }
   }
 
+  function exportJson() {
+    downloadText(
+      "nettopo-project.json",
+      JSON.stringify(
+        {
+          devices: topology!.devices,
+          connections: topology!.connections,
+          network_plan: plan,
+        },
+        null,
+        2,
+      ),
+    );
+  }
+
+  async function exportPng() {
+    const el = document.querySelector<HTMLElement>(".react-flow");
+    if (!el) return toast.error("Open the Diagram tab first");
+    const url = await toPng(el, { backgroundColor: "#0a0e17", pixelRatio: 2 });
+    downloadDataUrl("nettopo-diagram.png", url);
+  }
+
+  async function exportPdf() {
+    const el = document.querySelector<HTMLElement>(".react-flow");
+    if (!el) return toast.error("Open the Diagram tab first");
+    const url = await toPng(el, { backgroundColor: "#0a0e17", pixelRatio: 2 });
+    const img = new Image();
+    img.src = url;
+    await new Promise((r) => (img.onload = r));
+    const pdf = new jsPDF({
+      orientation: "landscape",
+      unit: "px",
+      format: [img.width, img.height],
+    });
+    pdf.addImage(url, "PNG", 0, 0, img.width, img.height);
+    pdf.save("nettopo-diagram.pdf");
+  }
+
   return (
-    <div className="flex h-[100dvh] flex-col">
-      <WorkspaceTopbar
+    <div className="flex h-[100dvh] flex-col md:flex-row">
+      <WorkspaceRail
         view={wsView}
         onView={setWsView}
-        onSave={isSaved ? undefined : onSave}
+        onSave={isSaved ? undefined : () => setSaveOpen(true)}
+        saving={saving}
+        onExportPng={exportPng}
+        onExportPdf={exportPdf}
+        onExportJson={exportJson}
+      />
+
+      <SaveProjectDialog
+        open={saveOpen}
+        onOpenChange={setSaveOpen}
+        onConfirm={onSave}
         saving={saving}
       />
 
-      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+      <div className="flex min-h-0 flex-1 flex-col pb-16 md:pb-0 lg:flex-row">
         <section className="relative min-h-0 min-w-0 flex-1">
           {wsView === "network" && (
             <TopologyBoard
@@ -281,13 +332,7 @@ export default function ResultPage() {
               onDownload={onDownloadCisco}
             />
           )}
-          {wsView === "nodes" && (
-            <NodesView
-              topology={topology}
-              addressing={addressing}
-              status={status}
-            />
-          )}
+          {wsView === "ipplan" && <IpPlanView plan={plan} />}
           {wsView === "cli" && (
             <CliView
               combined={cisco?.combined ?? ""}
@@ -305,7 +350,6 @@ export default function ResultPage() {
             />
           )}
         </section>
-
         {wsView === "network" && (
           <aside
             className={cn(
@@ -346,7 +390,6 @@ export default function ResultPage() {
                 />
               </div>
             </button>
-
             <div
               className={cn(
                 "items-center gap-4 border-b px-4",
@@ -373,7 +416,6 @@ export default function ResultPage() {
                 </button>
               ))}
             </div>
-
             <div
               className={cn(
                 "min-h-0 flex-1 space-y-4 overflow-y-auto p-4",
@@ -402,11 +444,7 @@ export default function ResultPage() {
                         />
                       ) : null}
                       {selectedAddr.gateway ? (
-                        <Row
-                          label="Gateway"
-                          value={selectedAddr.gateway}
-                          mono
-                        />
+                        <Row label="Gateway" value={selectedAddr.gateway} mono />
                       ) : null}
                       {selectedAddr.interfaces.map((iface) => (
                         <div
@@ -437,7 +475,6 @@ export default function ResultPage() {
                   )}
                 </>
               )}
-
               {tab === "devices" && (
                 <div className="space-y-1">
                   {topology.devices.map((d) => {
@@ -472,7 +509,6 @@ export default function ResultPage() {
                   })}
                 </div>
               )}
-
               {tab === "cli" && (
                 <>
                   <AiAnalysis
@@ -492,7 +528,6 @@ export default function ResultPage() {
                   )}
                 </>
               )}
-
               {tab === "deploy" && (
                 <div className="space-y-3 text-sm">
                   <p className="text-muted-foreground">
@@ -535,7 +570,6 @@ export default function ResultPage() {
                   )}
                 </div>
               )}
-
               {tab === "security" && (
                 <div className="space-y-3">
                   <AiAnalysis
@@ -571,10 +605,7 @@ export default function ResultPage() {
                     ))
                   )}
                   {showDiff && scopeIssues.length > 0 && (
-                    <PatchCard
-                      patch={buildPatch(activeIssues)}
-                      onRun={runCheck}
-                    />
+                    <PatchCard patch={buildPatch(activeIssues)} onRun={runCheck} />
                   )}
                 </div>
               )}
@@ -744,62 +775,6 @@ function Stat({ label, value }: { label: string; value: number }) {
     <div className="rounded-lg border bg-muted/30 p-3">
       <p className="text-2xl font-bold">{value}</p>
       <p className="text-xs text-muted-foreground">{label}</p>
-    </div>
-  );
-}
-
-function NodesView({
-  topology,
-  addressing,
-  status,
-}: {
-  topology: any;
-  addressing: any;
-  status: Record<string, string>;
-}) {
-  return (
-    <div className="h-full overflow-auto p-6">
-      <h1 className="mb-4 font-display text-xl font-bold">Nodes</h1>
-      <div className="overflow-x-auto rounded-lg border">
-        <table className="w-full min-w-[640px] text-sm">
-          <thead className="bg-muted/50">
-            <tr className="text-left text-xs uppercase text-muted-foreground">
-              <th className="px-4 py-2">Status</th>
-              <th className="px-4 py-2">Device</th>
-              <th className="px-4 py-2">Type</th>
-              <th className="px-4 py-2">VLAN</th>
-              <th className="px-4 py-2">IP</th>
-              <th className="px-4 py-2">Gateway</th>
-            </tr>
-          </thead>
-          <tbody>
-            {topology.devices.map((d: any) => {
-              const a = addressing?.byDevice[d.id];
-              const st = status[d.id];
-              return (
-                <tr key={d.id} className="border-t">
-                  <td className="px-4 py-2">
-                    <StatusDot status={st} />
-                  </td>
-                  <td className="px-4 py-2 font-medium">{d.label}</td>
-                  <td className="px-4 py-2">
-                    <Badge variant="outline" className="text-[10px]">
-                      {d.type}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-2">{a?.vlanId ?? "—"}</td>
-                  <td className="px-4 py-2 font-mono text-xs">
-                    {a?.interfaces[0]?.ip ?? "—"}
-                  </td>
-                  <td className="px-4 py-2 font-mono text-xs">
-                    {a?.gateway ?? "—"}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
     </div>
   );
 }

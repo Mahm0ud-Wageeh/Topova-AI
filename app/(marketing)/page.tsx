@@ -1,17 +1,14 @@
 "use client";
-
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import {
   BarChart3,
   Loader2,
-  ScanLine,
+  ShieldCheck,
   Sparkles,
   Terminal,
-  Upload,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Navbar } from "@/components/shared/navbar";
@@ -91,7 +88,6 @@ export default function LandingPage() {
   return (
     <div className="flex min-h-screen flex-col">
       <Navbar />
-
       <main className="flex-1">
         {/* ---------------- HERO ---------------- */}
         <section className="relative overflow-hidden">
@@ -103,14 +99,12 @@ export default function LandingPage() {
             className="pointer-events-none absolute inset-0 brand-glow"
             aria-hidden
           />
-
           <div className="container relative flex flex-col items-center py-20 text-center sm:py-28">
             <motion.div {...fadeUp(0)}>
               <Badge variant="ai" className="gap-1.5">
                 <Sparkles className="h-3 w-3" /> AI-NATIVE NETWORK PLANNING
               </Badge>
             </motion.div>
-
             <motion.h1
               {...fadeUp(0.05)}
               className="mt-6 max-w-3xl font-display text-4xl font-bold tracking-tight sm:text-6xl"
@@ -121,16 +115,14 @@ export default function LandingPage() {
                 Using AI
               </span>
             </motion.h1>
-
             <motion.p
               {...fadeUp(0.1)}
               className="mt-5 max-w-2xl text-lg text-muted-foreground"
             >
-              Describe your ideal network architecture or upload an existing
-              diagram. Our core engine instantly generates detailed, deployable
+              Describe your ideal network architecture in plain English or
+              Arabic. Our core engine instantly generates detailed, deployable
               Cisco CLI configurations and visual topologies.
             </motion.p>
-
             {/* Prompt box */}
             <motion.div {...fadeUp(0.15)} className="mt-10 w-full max-w-3xl">
               <Card className="ai-zone overflow-hidden text-left">
@@ -144,17 +136,10 @@ export default function LandingPage() {
                       if (!requireAuth()) return;
                       setText(e.target.value);
                     }}
-                    placeholder="Describ..."
+                    placeholder="Describe your network in plain English or Arabic..."
                     className="resize-none border-0 bg-transparent px-0 text-base shadow-none focus-visible:ring-0"
                   />
-                  <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
-                    <Button asChild variant="outline" size="sm" className="gap-2">
-                        <Button asChild variant="outline" size="icon" aria-label="Upload topology image" title="Upload topology image">
-                              <Link href="/upload">
-                              <Upload className="h-4 w-4" /> 
-                             </Link>
-                        </Button>
-                     </Button>
+                  <div className="mt-2 flex flex-wrap items-center justify-end gap-3">
                     <Button
                       onClick={generate}
                       disabled={loading}
@@ -170,7 +155,6 @@ export default function LandingPage() {
                   </div>
                 </CardContent>
               </Card>
-
               {/* Try chips */}
               <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
                 {EXAMPLES.map((ex) => (
@@ -190,7 +174,6 @@ export default function LandingPage() {
             </motion.div>
           </div>
         </section>
-
         {/* ---------------- FEATURES ---------------- */}
         <section className="container grid gap-4 pb-24 lg:grid-cols-2">
           {/* AI Diagram Generation */}
@@ -215,7 +198,6 @@ export default function LandingPage() {
               </CardContent>
             </Card>
           </motion.div>
-
           {/* Full Cisco CLI */}
           <motion.div {...fadeUp(0.05)}>
             <Card className="ai-zone h-full">
@@ -247,23 +229,23 @@ export default function LandingPage() {
               </CardContent>
             </Card>
           </motion.div>
-
-          {/* Whiteboard OCR */}
+          {/* Security Pre-flight */}
           <motion.div {...fadeUp(0.1)}>
             <Card className="h-full">
               <CardHeader>
                 <span className="grid h-10 w-10 place-items-center rounded-lg bg-primary/10 text-primary">
-                  <ScanLine className="h-5 w-5" />
+                  <ShieldCheck className="h-5 w-5" />
                 </span>
-                <CardTitle className="mt-3 text-xl">Whiteboard OCR</CardTitle>
+                <CardTitle className="mt-3 text-xl">
+                  Security Pre-flight
+                </CardTitle>
                 <p className="text-sm text-muted-foreground">
-                  Upload photos of hand-drawn diagrams. Our vision model parses
-                  shapes and text to digitize your brainstorms instantly.
+                  Automatic hardening checks flag risky configs and generate
+                  ready-to-apply patches before you deploy to production.
                 </p>
               </CardHeader>
             </Card>
           </motion.div>
-
           {/* Smart Capacity Planning */}
           <motion.div {...fadeUp(0.15)}>
             <Card className="h-full">
@@ -297,7 +279,6 @@ export default function LandingPage() {
           </motion.div>
         </section>
       </main>
-
       <Footer />
     </div>
   );
