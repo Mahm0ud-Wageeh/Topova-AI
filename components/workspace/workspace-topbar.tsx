@@ -5,7 +5,7 @@ import {
   Loader2,
   Network as NetworkIcon,
   Save,
-  Server,
+  Table2,
   ShieldCheck,
   Terminal,
 } from "lucide-react";
@@ -15,12 +15,12 @@ import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-export type WorkspaceView = "network" | "nodes" | "cli" | "security";
+export type WorkspaceView = "network" | "ipplan" | "cli" | "security";
 
 const TABS: { id: WorkspaceView; label: string; icon: typeof NetworkIcon }[] = [
-  { id: "network", label: "Network", icon: NetworkIcon },
-  { id: "nodes", label: "Nodes", icon: Server },
-  { id: "cli", label: "CLI", icon: Terminal },
+  { id: "network", label: "Diagram", icon: NetworkIcon },
+  { id: "ipplan", label: "IP Plan", icon: Table2 },
+  { id: "cli", label: "Config", icon: Terminal },
   { id: "security", label: "Security", icon: ShieldCheck },
 ];
 

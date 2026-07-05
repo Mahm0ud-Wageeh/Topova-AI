@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
+import { LayoutDashboard } from "lucide-react";
 import { Logo } from "@/components/shared/logo";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,12 @@ export function Navbar() {
             </Button>
           </SignedOut>
           <SignedIn>
+            <Button asChild variant="ghost" size="sm" className="gap-1.5">
+              <Link href="/dashboard">
+                <LayoutDashboard className="h-4 w-4" />
+                <span className="hidden sm:inline">Dashboard</span>
+              </Link>
+            </Button>
             <UserButton afterSignOutUrl="/" />
           </SignedIn>
         </nav>

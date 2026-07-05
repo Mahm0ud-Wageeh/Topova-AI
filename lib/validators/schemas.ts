@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const deviceTypeSchema = z.enum(["ROUTER", "SWITCH", "SERVER", "PC", "FIREWALL", "AP"]);
+export const deviceTypeSchema = z.enum(["ROUTER", "SWITCH", "SERVER", "PC", "FIREWALL", "AP", "PRINTER", "CAMERA", "NVR", "IP_PHONE"]);
 
 export const deviceSchema = z.object({
   id: z.string(),

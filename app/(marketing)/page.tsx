@@ -5,10 +5,15 @@ import { motion } from "framer-motion";
 import { toast } from "sonner";
 import {
   BarChart3,
+  FileJson,
+  Globe,
+  Layers,
   Loader2,
+  Rocket,
   ShieldCheck,
   Sparkles,
   Terminal,
+  Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Navbar } from "@/components/shared/navbar";
@@ -37,7 +42,6 @@ const EXAMPLES: { label: string; prompt: string }[] = [
   },
 ];
 
-// Reusable fade-up animation (kept as a helper so the JSX stays clean).
 const fadeUp = (delay = 0) => ({
   initial: { opacity: 0, y: 20 },
   whileInView: { opacity: 1, y: 0 },
@@ -47,13 +51,43 @@ const fadeUp = (delay = 0) => ({
 
 const capacityBars = ["h-10", "h-16", "h-9", "h-24", "h-32", "h-20", "h-12"];
 
+const STEPS = [
+  {
+    icon: Terminal,
+    title: "Describe your network",
+    desc: "Type a natural-language prompt in English or Arabic. Mention devices, VLANs, protocols, or any requirements.",
+    color: "text-primary",
+    bg: "bg-primary/10",
+  },
+  {
+    icon: Sparkles,
+    title: "AI generates everything",
+    desc: "Our engine builds the topology diagram, allocates IPs/VLANs, and produces production-ready Cisco IOS configs.",
+    color: "text-cyan",
+    bg: "bg-cyan/10",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Review & deploy",
+    desc: "Inspect pre-flight security checks, apply hardening patches with one click, then export or save your project.",
+    color: "text-primary",
+    bg: "bg-primary/10",
+  },
+];
+
+const STATS = [
+  { value: "10", suffix: "+", label: "Device types" },
+  { value: "8", suffix: "", label: "AI providers" },
+  { value: "0", suffix: "$", label: "Free to start" },
+  { value: "<2", suffix: "s", label: "Generation time" },
+];
+
 export default function LandingPage() {
   const router = useRouter();
   const { isLoaded, isSignedIn } = useAuth();
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Gate guests: the first interaction sends them to sign in first.
   function requireAuth() {
     if (!isLoaded) return false;
     if (isSignedIn) return true;
@@ -174,6 +208,46 @@ export default function LandingPage() {
             </motion.div>
           </div>
         </section>
+
+        {/* ---------------- HOW IT WORKS ---------------- */}
+        <section className="container py-24">
+          <motion.div {...fadeUp(0)} className="mb-12 text-center">
+            <Badge variant="secondary" className="mb-3">
+              HOW IT WORKS
+            </Badge>
+            <h2 className="font-display text-3xl font-bold sm:text-4xl">
+              From prompt to production in three steps
+            </h2>
+            <p className="mx-auto mt-3 max-w-xl text-muted-foreground">
+              No manual diagram drawing, no spreadsheet IP planning. Just
+              describe what you need.
+            </p>
+          </motion.div>
+          <div className="grid gap-8 md:grid-cols-3">
+            {STEPS.map((step, i) => (
+              <motion.div key={step.title} {...fadeUp(i * 0.05)}>
+                <Card className="h-full text-center">
+                  <CardHeader>
+                    <span
+                      className={cn(
+                        "mx-auto grid h-12 w-12 place-items-center rounded-xl",
+                        step.bg,
+                      )}
+                    >
+                      <step.icon className={cn("h-6 w-6", step.color)} />
+                    </span>
+                    <div className="mx-auto mt-3 flex h-7 w-7 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground">
+                      {i + 1}
+                    </div>
+                    <CardTitle className="mt-2 text-lg">{step.title}</CardTitle>
+                    <p className="text-sm text-muted-foreground">{step.desc}</p>
+                  </CardHeader>
+                </Card>
+              </motion.div>
+            ))}
+          </div>
+        </section>
+
         {/* ---------------- FEATURES ---------------- */}
         <section className="container grid gap-4 pb-24 lg:grid-cols-2">
           {/* AI Diagram Generation */}
@@ -273,6 +347,59 @@ export default function LandingPage() {
                       )}
                     />
                   ))}
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        </section>
+
+        {/* ---------------- STATS ---------------- */}
+        <section className="border-y bg-muted/30">
+          <div className="container grid grid-cols-2 gap-8 py-16 md:grid-cols-4">
+            {STATS.map((s, i) => (
+              <motion.div key={s.label} {...fadeUp(i * 0.05)} className="text-center">
+                <p className="font-display text-4xl font-bold text-primary">
+                  {s.value}
+                  <span className="text-cyan">{s.suffix}</span>
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">{s.label}</p>
+              </motion.div>
+            ))}
+          </div>
+        </section>
+
+        {/* ---------------- CTA ---------------- */}
+        <section className="container py-24">
+          <motion.div {...fadeUp(0)}>
+            <Card className="relative overflow-hidden">
+              <div className="pointer-events-none absolute inset-0 cyber-grid" aria-hidden />
+              <div className="pointer-events-none absolute inset-0 brand-glow" aria-hidden />
+              <CardContent className="relative flex flex-col items-center gap-6 py-16 text-center">
+                <Badge variant="ai" className="gap-1.5">
+                  <Zap className="h-3 w-3" /> GET STARTED
+                </Badge>
+                <h2 className="max-w-xl font-display text-3xl font-bold sm:text-4xl">
+                  Ready to design your next network?
+                </h2>
+                <p className="max-w-lg text-muted-foreground">
+                  Start free with no API key required. Our built-in rule engine
+                  handles any prompt offline. Add an AI key for enhanced natural
+                  language understanding.
+                </p>
+                <div className="flex flex-wrap justify-center gap-3">
+                  <Button size="lg" onClick={() => { requireAuth() && router.push("/"); }}>
+                    <Rocket className="h-4 w-4" /> Launch workspace
+                  </Button>
+                  <Button size="lg" variant="outline" asChild>
+                    <a href="https://github.com/Mahm0ud-Wageeh" target="_blank" rel="noopener noreferrer">
+                      <Globe className="h-4 w-4" /> View on GitHub
+                    </a>
+                  </Button>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center justify-center gap-4 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1"><Layers className="h-3.5 w-3.5" /> 10 device types</span>
+                  <span className="flex items-center gap-1"><FileJson className="h-3.5 w-3.5" /> JSON / PNG / PDF export</span>
+                  <span className="flex items-center gap-1"><ShieldCheck className="h-3.5 w-3.5" /> Security hardening</span>
                 </div>
               </CardContent>
             </Card>

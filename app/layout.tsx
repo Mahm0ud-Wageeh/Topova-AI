@@ -13,9 +13,31 @@ const display = Hanken_Grotesk({ subsets: ["latin"], variable: "--font-display",
 const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono", display: "swap" });
 
 export const metadata: Metadata = {
-  title: "NetTopo AI -- AI Network Topology & Planner",
+  title: {
+    default: "NetTopo AI - AI Network Topology & Planner",
+    template: "%s | NetTopo AI",
+  },
   description:
-    "Describe, draw, or upload a network and get a professional topology diagram plus a full IP/VLAN/routing plan.",
+    "Design professional network topologies using AI. Describe your network in plain English or Arabic and get instant topology diagrams, IP/VLAN plans, and production-ready Cisco IOS configurations.",
+  keywords: [
+    "network topology",
+    "network planner",
+    "AI network design",
+    "Cisco IOS",
+    "VLAN planning",
+    "IP addressing",
+    "network diagram",
+    "topology generator",
+  ],
+  authors: [{ name: "NetTopo AI" }],
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    siteName: "NetTopo AI",
+    title: "NetTopo AI - AI Network Topology & Planner",
+    description:
+      "Design professional network topologies using AI. Get instant diagrams, IP/VLAN plans, and Cisco IOS configs.",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
