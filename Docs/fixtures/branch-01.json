@@ -1,0 +1,61 @@
+{
+  "fixtureVersion": 1,
+  "id": "branch-01",
+  "evidenceLevel": "synthetic-expectation",
+  "greenfield": {
+    "promptAr": "عايز شبكة فرع واحد فيها ١٢ جهاز موظفين، ٤ سيرفرات وواجهة إدارة واحدة. استخدم 10.50.0.0/24 وقسمهم على VLANs 10 و20 و99، وخلّيني أقارن سويتش ٢٤ منفذ بخيار سويتشين.",
+    "promptEn": "Design a single branch for 12 staff endpoints, 4 servers and one management interface. Use 10.50.0.0/24 and VLANs 10, 20 and 99. Compare one 24-port switch with two switches.",
+    "parentCidr": "10.50.0.0/24",
+    "requirements": [
+      { "id": "staff", "vlanId": 10, "endpointAddresses": 12, "extraGatewayAddresses": 1 },
+      { "id": "servers", "vlanId": 20, "endpointAddresses": 4, "extraGatewayAddresses": 1 },
+      { "id": "management", "vlanId": 99, "endpointAddresses": 1, "extraGatewayAddresses": 1, "minimumBlockAddresses": 8 }
+    ],
+    "expectedDesignAlternatives": [
+      { "id": "single-switch", "routers": 1, "switches": 1, "portsPerSwitch": 24, "accessPortsUsed": 16, "switchPortsForUplinks": 1, "freeSwitchPorts": 7 },
+      { "id": "two-switches", "routers": 1, "switches": 2, "portsPerSwitch": 24, "accessPortsUsed": 16, "switchPortsForUplinks": 3, "freeSwitchPorts": 29 }
+    ]
+  },
+  "baseline": {
+    "id": "branch-01-base",
+    "siteId": "branch-a",
+    "parentCidr": "10.50.0.0/24",
+    "devices": [
+      { "id": "r1", "kind": "router", "interfaces": [{ "id": "r1-uplink", "kind": "physical" }] },
+      { "id": "sw1", "kind": "switch", "interfaces": [{ "id": "sw1-p24", "kind": "physical" }, { "id": "sw1-mgmt", "kind": "logical" }] }
+    ],
+    "links": [
+      { "id": "uplink-01", "fromInterfaceId": "r1-uplink", "toInterfaceId": "sw1-p24", "taggedVlans": [10, 20, 99] }
+    ],
+    "subnets": [
+      { "segmentId": "staff", "vlanId": 10, "cidr": "10.50.0.0/28", "gateway": "10.50.0.1" },
+      { "segmentId": "servers", "vlanId": 20, "cidr": "10.50.0.16/29", "gateway": "10.50.0.17" },
+      { "segmentId": "management", "vlanId": 99, "cidr": "10.50.0.24/29", "gateway": "10.50.0.25" }
+    ],
+    "aggregateAccessPorts": [
+      { "switchId": "sw1", "firstPort": 1, "lastPort": 12, "segmentId": "staff" },
+      { "switchId": "sw1", "firstPort": 13, "lastPort": 16, "segmentId": "servers" }
+    ]
+  },
+  "brownfield": {
+    "baselineId": "branch-01-base",
+    "promptAr": "ضيف VLAN 40 لأربع أجهزة ضيوف. حافظ على عناوين ومنافذ الموجودين. الضيوف ممنوع يوصلوا لشبكة الإدارة والموظفين لازم يفضلوا قادرين يوصلوا لخادم التطبيق.",
+    "newSegment": { "id": "guests", "vlanId": 40, "endpointAddresses": 4, "extraGatewayAddresses": 1 },
+    "expectedDiff": {
+      "addedSubnet": { "segmentId": "guests", "vlanId": 40, "cidr": "10.50.0.32/29", "gateway": "10.50.0.33" },
+      "addedAccessPorts": { "switchId": "sw1", "firstPort": 17, "lastPort": 20 },
+      "updatedUplink": { "id": "uplink-01", "taggedVlans": [10, 20, 40, 99] },
+      "existingSubnetsChanged": 0,
+      "existingAccessPortsChanged": 0,
+      "freeSwitchPortsAfter": 3
+    },
+    "policyAssertions": [
+      { "id": "guest-no-mgmt", "fromSegment": "guests", "toAddress": "10.50.0.26", "protocol": "icmp", "expected": "deny", "statusWithoutBehavioralEvidence": "unknown" },
+      { "id": "staff-keeps-app", "fromSegment": "staff", "toAddress": "10.50.0.18", "protocol": "tcp", "destinationPort": 443, "expected": "allow", "statusWithoutBehavioralEvidence": "unknown" }
+    ]
+  },
+  "negative": [
+    { "id": "pool-too-small", "parentCidrOverride": "10.50.0.0/28", "expectedRule": "IP-01", "expectedStatus": "fail" },
+    { "id": "trunk-peer-unknown", "baselineOmitInterfaceId": "r1-uplink", "asPartialImport": true, "expectedRule": "VLAN-01", "expectedStatus": "unknown" }
+  ]
+}

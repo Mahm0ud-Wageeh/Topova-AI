@@ -1,0 +1,88 @@
+[
+  {
+    "id": "small-office",
+    "description": "One router, one access switch and two workstations on a flat LAN.",
+    "devices": [
+      {
+        "type": "ROUTER",
+        "count": 1
+      },
+      {
+        "type": "SWITCH",
+        "count": 1
+      },
+      {
+        "type": "PC",
+        "count": 2
+      }
+    ],
+    "options": {
+      "vlan": false,
+      "routingProtocol": "STATIC"
+    },
+    "expectedDevices": 4
+  },
+  {
+    "id": "segmented-office",
+    "description": "User and server VLANs with a perimeter firewall.",
+    "devices": [
+      {
+        "type": "ROUTER",
+        "count": 1
+      },
+      {
+        "type": "FIREWALL",
+        "count": 1
+      },
+      {
+        "type": "SWITCH",
+        "count": 1
+      },
+      {
+        "type": "PC",
+        "count": 3
+      },
+      {
+        "type": "SERVER",
+        "count": 1
+      }
+    ],
+    "options": {
+      "vlan": true,
+      "routingProtocol": "OSPF"
+    },
+    "expectedDevices": 7
+  },
+  {
+    "id": "cctv-branch",
+    "description": "Camera and user segmentation with an NVR; PoE estimate must be nonzero.",
+    "devices": [
+      {
+        "type": "ROUTER",
+        "count": 1
+      },
+      {
+        "type": "SWITCH",
+        "count": 1
+      },
+      {
+        "type": "CAMERA",
+        "count": 4
+      },
+      {
+        "type": "NVR",
+        "count": 1
+      },
+      {
+        "type": "PC",
+        "count": 1
+      }
+    ],
+    "options": {
+      "vlan": true,
+      "routingProtocol": "STATIC"
+    },
+    "expectedDevices": 8,
+    "poe": true
+  }
+]

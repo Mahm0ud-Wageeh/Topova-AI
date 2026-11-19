@@ -1,5 +1,6 @@
 # dependencies
 /node_modules
+**/node_modules/
 /.pnp
 .pnp.js
 
@@ -8,6 +9,7 @@
 
 # next.js
 /.next/
+**/.next/
 /out/
 
 # production
@@ -33,3 +35,10 @@ yarn-error.log*
 
 # vercel
 .vercel
+
+backend/.data/
+frontend/dist/
+
+backend/generated/
+playwright-report/
+test-results/

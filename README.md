@@ -1,117 +1,47 @@
-# NetTopo AI
+# Topova AI
 
-**AI-powered network topology designer & planner** for network engineers and CS students.
-Describe a network in **Arabic or English** or build it manually -- and get a
-professional topology diagram plus a complete IP / subnetting / VLAN / routing / security plan.
+A React + Express network design workspace with deterministic planning, educational simulation, optional external AI, reviewed design changes, version history and lab exports.
 
-> أداة لتصميم وتخطيط شبكات الحاسوب بالذكاء الاصطناعي. اوصف الشبكة بالعربي او الانجليزي،
->  او ابنيها يدوياً — واحصل على داياجرام احترافي + خطة IP و VLAN و Routing كاملة.
+## Development
 
----
+Requires Node.js 22.12+ and npm. Run `npm install`, copy `.env.example` to `.env` if needed, then `npm run dev`. The frontend opens at http://localhost:3000 and proxies API requests to the backend at port 4000. Local JSON storage works without PostgreSQL or AI keys.
 
-## Tech stack (100% free / open-source)
+## What works
 
-| Layer | Choice |
-|------|--------|
-| Framework | Next.js 14 (App Router) + TypeScript |
-| UI | Tailwind CSS + shadcn/ui + Framer Motion |
-| Diagrams | React Flow (interactive) + Mermaid (text) |
-| Auth | Clerk (free tier) |
-| DB / ORM | Supabase Postgres + Prisma |
-| AI | Gemini -> Hugging Face -> Ollama -> rule-based fallback |
-| Export | html-to-image + jsPDF (client-side) |
-| Tests | Vitest |
+- Signed guest sessions and optional email/password accounts with HttpOnly session cookies; guest data moves into an account on sign-in or registration.
+- Searchable, paginated conversations. Full message history is retained; older messages load on demand.
+- Topology editing with visible save status, retry and optimistic version conflict detection.
+- AI changes to an existing design are proposals: compare, accept or reject before the saved topology changes.
+- Design revision history, comparison and restore without deleting later history.
+- Deterministic addressing/VLAN planning, simulated packet/attack/traffic analysis, security heuristics, BOM/PoE estimates and a virtual CLI.
+- Shared export validation: structural errors block export; lab compatibility warnings require acknowledgment. Exported configs still require testing in the target lab.
+- English/Arabic, RTL/LTR, themes and keyboard-accessible command, terminal and export dialogs.
 
-The AI layer is optional: with **no API keys**, the deterministic rule engine still parses
-descriptions and produces a full plan, so the app always works.
+## Storage and production
 
----
+`NETTOPO_STORAGE=local-json` is for development. Local writes reload under a cross-process lock, write atomically, preserve a `.bak` backup and reject corrupted stores. Keep JSON files on a local disk, not a shared network filesystem.
 
-## Quick start
+Production requires `NETTOPO_STORAGE=postgresql`, valid `DATABASE_URL` / `DIRECT_URL`, and a dedicated `JWT_SECRET` of at least 32 random characters. Configure the exact public origin in `APP_URL` and `NETTOPO_AUTHORIZED_ORIGINS`. Run `npm run db:deploy`, `npm run build`, then `npm start`. Express serves both the API and the SPA on `BACKEND_PORT` (default 4000); put it behind HTTPS. Production does not use Vite preview.
 
-```bash
-# 1) install
-npm install
+Import an existing local store with `npm run db:import-local -- /absolute/path/store.json [owner-map.json]` after migrating the target database. Imports are transactional and never overwrite existing records. Keep the source backup until the imported accounts and designs have been verified. Old unsigned guest IDs are intentionally not accepted as proof of ownership; an operator can explicitly map owners during import. Old Clerk-era tables are retained by migrations, but the active runtime uses local accounts and platform records.
 
-# 2) configure environment
-cp .env.example .env        # then fill in the values (see below)
+## AI modes
 
-# 3) database (Supabase)
-npm run db:push             # or: npm run db:migrate
+Without `GEMINI_API_KEY`, chat uses local rules, current topology and structured preferences. It inspects JSON and Cisco/text attachments without executing their content; YAML/CSV are reported as text only. Free-form custom instructions and conversational inference require the external engine. The UI identifies local/external execution. Configuring external AI sends attached configuration text and profile context to that provider; avoid uploading secrets.
 
-# 4) run
-npm run dev                 # http://localhost:3000
-```
+Additional provider keys in `.env.example` are for topology parsing, not conversational chat.
 
-### Required environment variables
+## Verification
 
-See `.env.example`. Minimum to boot:
+| Command | Purpose |
+| --- | --- |
+| `npm run typecheck` | Type-check frontend, backend, shared domain and unit/integration tests |
+| `npm run lint` | Lint all active application and test code |
+| `npm test` | Offline domain and active Express API regression tests |
+| `npm run test:db` | PostgreSQL tests; set `NETTOPO_TEST_DATABASE_URL` to an explicit disposable loopback database and migrate it first |
+| `npm run test:e2e` | Desktop/mobile browser journeys; run `npx playwright install chromium` once |
+| `npm run test:production` | Smoke-test built SPA deep links, assets and API errors with an ephemeral store |
+| `npm run build` | Check server types and build the frontend |
+| `npm run check` | Typecheck, lint, unit/API tests and build |
 
-- `DATABASE_URL` + `DIRECT_URL` -- from Supabase (Project Settings -> Database).
-- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` + `CLERK_SECRET_KEY` -- from Clerk.
-
-Optional (better AI parsing): `GEMINI_API_KEY`, `HUGGINGFACE_API_KEY`, `OLLAMA_BASE_URL`.
-
----
-
-## Scripts
-
-| Script | Purpose |
-|--------|---------|
-| `npm run dev` | Start dev server |
-| `npm run build` | `prisma generate` + production build |
-| `npm run typecheck` | TypeScript check |
-| `npm run lint` | ESLint |
-| `npm test` | Run Vitest unit + route tests |
-| `npm run db:push` | Push Prisma schema to the DB |
-| `npm run db:studio` | Open Prisma Studio |
-
----
-
-## Project structure
-
-```
-app/
-  (marketing)/page.tsx        Landing page
-  (auth)/sign-in, sign-up     Clerk auth pages
-  (app)/dashboard             Projects list
-  (app)/prompt                Describe in natural language
-  (app)/upload                Image -> OCR -> topology
-  (app)/editor/[projectId]    Manual drag/add editor
-  (app)/result/[projectId]    Diagram + Mermaid + plan tabs
-  (app)/export/[projectId]    PNG / PDF / JSON export
-  api/                        Route handlers (projects, ai, topology, upload, export)
-components/
-  ui/                         shadcn primitives
-  shared/                     navbar, sidebar, logo, theme
-  topology/                   React Flow canvas, custom node, palette, Mermaid view
-lib/
-  network-engine/             parser, ip-planner, vlan-planner, routing, security, builder, planner
-  ai/                         provider chain (Gemini/HF/Ollama) + normalization
-  validators/                 zod schemas
-  auth.ts, db/prisma.ts, api/handler.ts
-prisma/schema.prisma          User, Project, Topology, Device, Connection, NetworkPlan
-tests/                        Vitest specs
-```
-
----
-
-## How it works
-
-1. **Input** -- prompt text, OCR text from an image, or manually added devices.
-2. **Parse** -- `lib/ai` tries each configured LLM, then falls back to `ruleParse` (EN + AR keywords/numbers).
-3. **Build** -- `topology-builder` expands `{type,count}` into labeled devices and infers a hierarchical wiring + layout.
-4. **Plan** -- `planner` computes VLANs, VLSM subnets, routing protocol (STATIC vs OSPF), and security notes.
-5. **Render** -- React Flow diagram + Mermaid text + a structured plan, all exportable.
-
----
-
-## Deploy (free)
-
-1. Push this repo to GitHub.
-2. Import it on **Vercel** (free Hobby plan).
-3. Add the same environment variables in the Vercel project settings.
-4. Set the build command to `npm run build` (Prisma generates during build).
-5. Deploy. Add your Vercel domain to Clerk's allowed origins.
-
-See the companion Notion runbook for a click-by-click guide.
+See [current architecture](Docs/04-architecture.md), [operations](Docs/09-operations.md), [reference labs](Docs/17-reference-labs.md) and [change report](Docs/18-hardening-and-review.md). Other product/design documents describe longer-term requirements and should not be read as a claim that every planned feature is shipped.

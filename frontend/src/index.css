@@ -1,0 +1,116 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --font-sans: "Inter Variable", system-ui, sans-serif;
+    --font-display: "Hanken Grotesk Variable", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
+    --background: 210 33% 99%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 221 83% 53%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 38% 95%;
+    --muted-foreground: 215 19% 38%;
+    --accent: 210 40% 95%;
+    --accent-foreground: 221 83% 53%;
+    --cyan: 189 94% 40%;
+    --cyan-foreground: 0 0% 100%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 214 32% 89%;
+    --input: 214 32% 89%;
+    --ring: 221 83% 53%;
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    --background: 226 65% 5%;
+    --foreground: 213 45% 92%;
+    --card: 223 42% 9%;
+    --card-foreground: 213 45% 92%;
+    --popover: 223 47% 8%;
+    --popover-foreground: 213 45% 92%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 218 33% 15%;
+    --secondary-foreground: 213 45% 92%;
+    --muted: 219 32% 14%;
+    --muted-foreground: 215 20% 68%;
+    --accent: 219 32% 16%;
+    --accent-foreground: 188 86% 53%;
+    --cyan: 188 86% 53%;
+    --cyan-foreground: 222 47% 11%;
+    --destructive: 0 75% 58%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 218 30% 18%;
+    --input: 218 30% 18%;
+    --ring: 217 91% 60%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "ss01", "cv01";
+  }
+
+  h1, h2, h3, h4 {
+    font-family: var(--font-display, system-ui), var(--font-sans, system-ui), sans-serif;
+    letter-spacing: -0.02em;
+  }
+
+  [dir="rtl"] {
+    font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+  }
+  [dir="rtl"] :is(h1, h2, h3, h4) {
+    font-family: inherit;
+    letter-spacing: normal;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+}
+
+@layer components {
+  .cyber-grid {
+    background-image:
+      linear-gradient(to right, hsl(var(--border) / 0.45) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(var(--border) / 0.45) 1px, transparent 1px);
+    background-size: 32px 32px;
+    mask-image: radial-gradient(ellipse 85% 65% at 50% 0%, #000 55%, transparent 100%);
+  }
+
+  .brand-glow {
+    background: radial-gradient(
+      ellipse 65% 55% at 50% 0%,
+      hsl(var(--primary) / 0.22),
+      transparent 72%
+    );
+  }
+
+  .ai-zone {
+    border-inline-start: 2px solid hsl(var(--cyan));
+    background: linear-gradient(90deg, hsl(var(--cyan) / 0.08), transparent 65%);
+  }
+}
+
+:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 3px; }
+::selection { background: hsl(var(--primary) / .25); color: hsl(var(--foreground)); }
+@media (prefers-reduced-motion: reduce) {
+  .animate-pulse, .animate-spin { animation: none; }
+  html { scroll-behavior: auto; }
+}
+
+@media (pointer: coarse) { button, [role="button"], select { min-height: 44px; min-width: 44px; } }
