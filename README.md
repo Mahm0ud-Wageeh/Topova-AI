@@ -28,9 +28,12 @@ Import an existing local store with `npm run db:import-local -- /absolute/path/s
 ## Vercel deployment
 
 Import the repository root. `vercel.json` selects the Other framework preset,
-builds the SPA into `frontend/dist`, routes `/api/*` to `api/index.ts`, and keeps
+builds the SPA into `frontend/dist`, routes `/api/*` to `api/index.mjs`, and keeps
 SPA deep links working. Do not select the old Next.js preset. Node.js is pinned
 to 24 LTS. Vercel hosts static assets; the Express function does not open a port.
+The build bundles backend TypeScript and path aliases into
+`backend/dist/serverless.mjs`; the production smoke runs that exact artifact in
+plain Node to catch deployment-only module resolution failures.
 
 Configure Production with `NETTOPO_STORAGE=postgresql`, `DATABASE_URL`,
 `DIRECT_URL`, a dedicated random `JWT_SECRET` of at least 32 characters, and the

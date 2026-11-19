@@ -12,7 +12,7 @@ Use a process manager that forwards SIGTERM. The backend stops accepting connect
 
 On Vercel, use the repository-root configuration in `vercel.json`, not the legacy
 Next.js preset. Static files are served from `frontend/dist` and API traffic goes
-to `api/index.ts`. The production build applies committed Prisma migrations
+to `api/index.mjs`. The production build applies committed Prisma migrations
 before building; preview builds do not migrate and require separate database
 credentials and session/origin configuration. Keep the function in the database's
 region and use a pool-compatible connection URL. In-process rate limits are per

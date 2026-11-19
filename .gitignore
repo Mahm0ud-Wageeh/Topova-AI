@@ -40,5 +40,6 @@ backend/.data/
 frontend/dist/
 
 backend/generated/
+backend/dist/
 playwright-report/
 test-results/
