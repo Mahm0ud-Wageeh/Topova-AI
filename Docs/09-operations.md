@@ -27,6 +27,11 @@ Authorization remains enforced by the Express API. A paused Supabase project mus
 be resumed before migrations or requests can connect; a pooler "tenant not found"
 error can indicate a paused project rather than a missing database password.
 
+The native Prisma runtime prefers a PostgreSQL `DATABASE_URL`. If an old
+Accelerate/Data Proxy URL remains configured, it uses a PostgreSQL `DIRECT_URL`
+instead. Configure a pool-compatible `postgresql://` runtime URL for normal use;
+the active client does not load the Accelerate extension.
+
 PostgreSQL: schedule encrypted database backups using the deployment's database tooling and verify restoration into a separate database. Retain those backups according to your project policy. Application revisions are not a substitute for database backups.
 
 Local JSON: every successful mutation atomically replaces the store after preserving the previous file as `.bak`. If parsing fails, stop the app, preserve both files, inspect/restore the known-good backup and restart. Do not discard a lock unless its recorded process is no longer alive. Lock acquisition is bounded; timeouts return a retryable error.
