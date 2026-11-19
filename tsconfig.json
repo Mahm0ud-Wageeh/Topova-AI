@@ -36,6 +36,7 @@
     "baseUrl": "."
   },
   "include": [
+    "api/**/*.ts",
     "frontend/src/**/*.ts",
     "frontend/src/**/*.tsx",
     "frontend/vite.config.ts",

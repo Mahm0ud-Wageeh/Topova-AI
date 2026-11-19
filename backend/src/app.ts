@@ -24,6 +24,8 @@ import { createDataStore, type DataStore } from "./storage";
 export interface AppOptions {
   store?: DataStore;
   disableRateLimit?: boolean;
+  /** Serverless deployments serve the built SPA through the CDN. */
+  serveFrontend?: boolean;
 }
 
 export function createApp(options: AppOptions = {}) {
@@ -183,7 +185,7 @@ export function createApp(options: AppOptions = {}) {
       .json({ error: { code: "NOT_FOUND", message: "API route not found." } });
   });
 
-  if (process.env.NODE_ENV === "production") {
+  if (process.env.NODE_ENV === "production" && options.serveFrontend !== false) {
     const webRoot = fileURLToPath(
       new URL("../../frontend/dist/", import.meta.url),
     );

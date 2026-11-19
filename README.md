@@ -4,7 +4,7 @@ A React + Express network design workspace with deterministic planning, educatio
 
 ## Development
 
-Requires Node.js 22.12+ and npm. Run `npm install`, copy `.env.example` to `.env` if needed, then `npm run dev`. The frontend opens at http://localhost:3000 and proxies API requests to the backend at port 4000. Local JSON storage works without PostgreSQL or AI keys.
+Requires Node.js 24 LTS and npm. Run `npm install`, copy `.env.example` to `.env` if needed, then `npm run dev`. The frontend opens at http://localhost:3000 and proxies API requests to the backend at port 4000. Local JSON storage works without PostgreSQL or AI keys.
 
 ## What works
 
@@ -24,6 +24,21 @@ Requires Node.js 22.12+ and npm. Run `npm install`, copy `.env.example` to `.env
 Production requires `NETTOPO_STORAGE=postgresql`, valid `DATABASE_URL` / `DIRECT_URL`, and a dedicated `JWT_SECRET` of at least 32 random characters. Configure the exact public origin in `APP_URL` and `NETTOPO_AUTHORIZED_ORIGINS`. Run `npm run db:deploy`, `npm run build`, then `npm start`. Express serves both the API and the SPA on `BACKEND_PORT` (default 4000); put it behind HTTPS. Production does not use Vite preview.
 
 Import an existing local store with `npm run db:import-local -- /absolute/path/store.json [owner-map.json]` after migrating the target database. Imports are transactional and never overwrite existing records. Keep the source backup until the imported accounts and designs have been verified. Old unsigned guest IDs are intentionally not accepted as proof of ownership; an operator can explicitly map owners during import. Old Clerk-era tables are retained by migrations, but the active runtime uses local accounts and platform records.
+
+## Vercel deployment
+
+Import the repository root. `vercel.json` selects the Other framework preset,
+builds the SPA into `frontend/dist`, routes `/api/*` to `api/index.ts`, and keeps
+SPA deep links working. Do not select the old Next.js preset. Node.js is pinned
+to 24 LTS. Vercel hosts static assets; the Express function does not open a port.
+
+Configure Production with `NETTOPO_STORAGE=postgresql`, `DATABASE_URL`,
+`DIRECT_URL`, a dedicated random `JWT_SECRET` of at least 32 characters, and the
+exact public origin in both `APP_URL` and `NETTOPO_AUTHORIZED_ORIGINS`.
+`npm run build:vercel` applies committed Prisma migrations for Production before
+building; failures stop the deployment. Preview builds skip migrations and need
+their own database, signing secret and allowed origin. Never use local JSON
+storage for a Vercel function. Preserve database backups before schema upgrades.
 
 ## AI modes
 

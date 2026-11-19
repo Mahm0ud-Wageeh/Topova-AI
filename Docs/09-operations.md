@@ -10,6 +10,15 @@ Use a process manager that forwards SIGTERM. The backend stops accepting connect
 
 ## Backups and restore
 
+On Vercel, use the repository-root configuration in `vercel.json`, not the legacy
+Next.js preset. Static files are served from `frontend/dist` and API traffic goes
+to `api/index.ts`. The production build applies committed Prisma migrations
+before building; preview builds do not migrate and require separate database
+credentials and session/origin configuration. Keep the function in the database's
+region and use a pool-compatible connection URL. In-process rate limits are per
+function instance; configure platform rate limiting when shared enforcement is
+required. See the README for required environment variables.
+
 PostgreSQL: schedule encrypted database backups using the deployment's database tooling and verify restoration into a separate database. Retain those backups according to your project policy. Application revisions are not a substitute for database backups.
 
 Local JSON: every successful mutation atomically replaces the store after preserving the previous file as `.bak`. If parsing fails, stop the app, preserve both files, inspect/restore the known-good backup and restart. Do not discard a lock unless its recorded process is no longer alive. Lock acquisition is bounded; timeouts return a retryable error.
