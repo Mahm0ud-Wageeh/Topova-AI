@@ -2,7 +2,7 @@
 
 ## Development and production
 
-Development: Node 22.12+, `npm install`, `npm run dev`. Local JSON is the default. No external AI key is required.
+Development: Node 24 LTS, `npm install`, `npm run dev`. Local JSON is the default. No external AI key is required.
 
 Production: configure PostgreSQL URLs, `NETTOPO_STORAGE=postgresql`, a dedicated random `JWT_SECRET` of at least 32 characters, exact allowed origins and HTTPS. Run database migrations, build, and start. Express serves `/api` and the built SPA on port 4000 by default. A missing production secret, unsupported storage or missing web build prevents startup. Database connection is checked before listening.
 
@@ -18,6 +18,14 @@ credentials and session/origin configuration. Keep the function in the database'
 region and use a pool-compatible connection URL. In-process rate limits are per
 function instance; configure platform rate limiting when shared enforcement is
 required. See the README for required environment variables.
+
+Application tables have row-level security enabled with no public client policies.
+The Express datastore must connect as the table owner or a dedicated server role
+with BYPASSRLS; never expose those credentials to the browser. On Supabase this
+blocks anon/authenticated Data API access to accounts and owner-scoped records.
+Authorization remains enforced by the Express API. A paused Supabase project must
+be resumed before migrations or requests can connect; a pooler "tenant not found"
+error can indicate a paused project rather than a missing database password.
 
 PostgreSQL: schedule encrypted database backups using the deployment's database tooling and verify restoration into a separate database. Retain those backups according to your project policy. Application revisions are not a substitute for database backups.
 
