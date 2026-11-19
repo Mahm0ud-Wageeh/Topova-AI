@@ -41,11 +41,25 @@ export function createApp(options: AppOptions = {}) {
           ? {
               directives: {
                 defaultSrc: ["'self'"],
-                scriptSrc: ["'self'"],
+                scriptSrc: [
+                  "'self'",
+                  "https://*.clerk.accounts.dev",
+                  "https://*.clerk.com",
+                  "https://challenges.cloudflare.com",
+                ],
                 styleSrc: ["'self'", "'unsafe-inline'"],
-                imgSrc: ["'self'", "data:", "blob:"],
+                imgSrc: ["'self'", "data:", "blob:", "https://img.clerk.com"],
                 fontSrc: ["'self'", "data:"],
-                connectSrc: ["'self'"],
+                connectSrc: [
+                  "'self'",
+                  "https://*.clerk.accounts.dev",
+                  "https://*.clerk.com",
+                ],
+                frameSrc: [
+                  "'self'",
+                  "https://*.clerk.accounts.dev",
+                  "https://challenges.cloudflare.com",
+                ],
                 workerSrc: ["'self'", "blob:"],
                 objectSrc: ["'none'"],
                 frameAncestors: ["'none'"],
@@ -57,17 +71,42 @@ export function createApp(options: AppOptions = {}) {
     }),
   );
 
-  const configuredOrigins = (process.env.NETTOPO_AUTHORIZED_ORIGINS ?? "")
-    .split(",")
-    .map((o) => o.trim())
-    .filter(Boolean);
+  const configuredOrigins = [
+    ...(process.env.NETTOPO_AUTHORIZED_ORIGINS ?? "")
+      .split(",")
+      .map((o) => o.trim())
+      .filter(Boolean),
+    ...(process.env.APP_URL?.trim()
+      ? [process.env.APP_URL.trim().replace(/\/$/, "")]
+      : []),
+    ...(process.env.VERCEL_URL?.trim()
+      ? [`https://${process.env.VERCEL_URL.trim()}`]
+      : []),
+    ...(process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim()
+      ? [`https://${process.env.VERCEL_PROJECT_PRODUCTION_URL.trim()}`]
+      : []),
+  ];
+
+  const isSameOrigin = (req: express.Request, origin: string) => {
+    const host = (
+      req.header("x-forwarded-host") ||
+      req.header("host") ||
+      ""
+    ).trim();
+    if (!host) return false;
+    return origin === `https://${host}` || origin === `http://${host}`;
+  };
 
   app.use(
     cors({
-      origin:
-        configuredOrigins.length > 0
+      origin: (origin, callback) => {
+        if (!origin) return callback(null, true);
+        const allowed = configuredOrigins.length
           ? configuredOrigins
-          : ["http://localhost:3000", "http://127.0.0.1:3000"],
+          : ["http://localhost:3000", "http://127.0.0.1:3000"];
+        if (allowed.includes(origin)) return callback(null, true);
+        return callback(null, false);
+      },
       credentials: true,
       exposedHeaders: ["X-Request-Id", "Content-Disposition"],
     }),
@@ -83,6 +122,9 @@ export function createApp(options: AppOptions = {}) {
 
   if (!options.disableRateLimit)
     app.use("/api", rateLimit({ windowMs: 60_000, max: 300 }));
+  // Allow larger payloads (up to 4 MB) only on multimodal chat routes for pasted screenshots/configs
+  app.use("/api/v1/agent", express.json({ limit: "4mb" }));
+  app.use("/api/v1/conversations", express.json({ limit: "4mb" }));
   app.use(express.json({ limit: "512kb" }));
 
   if (!options.disableRateLimit) {
@@ -114,6 +156,7 @@ export function createApp(options: AppOptions = {}) {
     if (
       origin &&
       !allowed.includes(origin) &&
+      !isSameOrigin(req, origin) &&
       !["GET", "HEAD", "OPTIONS"].includes(req.method)
     ) {
       res.status(403).json({

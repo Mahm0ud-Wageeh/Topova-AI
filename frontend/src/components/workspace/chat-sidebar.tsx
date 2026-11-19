@@ -72,14 +72,21 @@ export function ChatSidebar({
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
+  const [filterMode, setFilterMode] = useState<"all" | "topologies">("all");
 
-  const pinned = conversations.filter((c) => c.pinned);
+  const filtered =
+    filterMode === "topologies"
+      ? conversations.filter((c) => c.hasTopology)
+      : conversations;
+  const topologyCount = conversations.filter((c) => c.hasTopology).length;
+
+  const pinned = filtered.filter((c) => c.pinned);
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
-  const today = conversations.filter(
+  const today = filtered.filter(
     (c) => !c.pinned && new Date(c.updatedAt) >= startOfToday,
   );
-  const earlier = conversations.filter(
+  const earlier = filtered.filter(
     (c) => !c.pinned && new Date(c.updatedAt) < startOfToday,
   );
 
@@ -119,10 +126,10 @@ export function ChatSidebar({
           return (
             <div
               key={c.id}
-              className={`group relative flex items-center gap-2 rounded-xl px-2.5 py-2 text-xs transition-colors ${
+              className={`group relative flex items-center gap-2 rounded-xl px-2.5 py-2 text-xs transition-all duration-200 ${
                 active
-                  ? "bg-primary/15 text-foreground font-semibold ring-1 ring-primary/30"
-                  : "text-muted-foreground hover:bg-muted/70 hover:text-foreground"
+                  ? "glass-active-item font-semibold"
+                  : "text-foreground/75 hover:bg-white/25 hover:text-foreground dark:hover:bg-white/10"
               }`}
             >
               {isEditing ? (
@@ -220,19 +227,19 @@ export function ChatSidebar({
   }
 
   return (
-    <div className="flex h-full flex-col bg-card/95 backdrop-blur-xl">
+    <div className="glass-panel flex h-full flex-col overflow-hidden rounded-2xl">
       {/* Top Brand + New Chat */}
-      <div className="shrink-0 space-y-2.5 border-b p-3">
+      <div className="shrink-0 space-y-2.5 border-b border-border/50 p-3">
         <div className="flex items-center justify-between gap-2">
-          <Link to="/" className="flex items-center">
-            <TopovaLogo size={30} compact />
+          <Link to="/chat" className="flex items-center">
+            <TopovaLogo size={28} compact />
           </Link>
 
           {onCloseMobile && (
             <Button
               size="icon"
               variant="ghost"
-              className="h-8 w-8 lg:hidden"
+              className="h-8 w-8 rounded-xl lg:hidden"
               onClick={onCloseMobile}
             >
               <X className="h-4 w-4" />
@@ -253,7 +260,7 @@ export function ChatSidebar({
           </span>
           <kbd
             dir="ltr"
-            className="hidden rounded bg-white/15 px-1.5 py-0.5 font-mono text-[10px] sm:inline"
+            className="hidden rounded-md bg-white/15 px-1.5 py-0.5 font-mono text-[10px] sm:inline"
           >
             Ctrl+Shift+O
           </kbd>
@@ -265,18 +272,46 @@ export function ChatSidebar({
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder={t("ابحث في المحادثات...", "Search conversations...")}
-            className="h-8 w-full rounded-lg border bg-background/70 pe-2.5 ps-8 text-xs focus:border-primary focus:outline-none"
+            className="h-8 w-full rounded-xl border border-border/60 bg-background/50 pe-2.5 ps-8 text-xs backdrop-blur-sm transition-colors focus:border-primary/60 focus:bg-background/80 focus:outline-none"
           />
+        </div>
+
+        {/* Smart Filter Switcher */}
+        <div className="grid grid-cols-2 gap-1 rounded-xl bg-muted/50 p-0.5 text-[11px]">
+          <button
+            type="button"
+            onClick={() => setFilterMode("all")}
+            className={`rounded-lg py-1 font-medium transition-all ${
+              filterMode === "all"
+                ? "bg-card text-foreground shadow-xs"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {t("الكل", "All")} ({conversations.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterMode("topologies")}
+            className={`rounded-lg py-1 font-medium transition-all ${
+              filterMode === "topologies"
+                ? "bg-card text-foreground shadow-xs"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {t("المخططات", "Topologies")} ({topologyCount})
+          </button>
         </div>
       </div>
 
       {/* Scrollable Conversations List */}
       <div className="flex-1 overflow-y-auto px-2 py-2 space-y-2">
-        {conversations.length === 0 ? (
+        {filtered.length === 0 ? (
           <div className="px-3 py-8 text-center text-xs text-muted-foreground space-y-1">
             <MessageSquare className="mx-auto h-6 w-6 opacity-35" />
             <p>
-              {t("لا توجد محادثات محفوظة بعد.", "No saved conversations yet.")}
+              {filterMode === "topologies"
+                ? t("لا توجد محادثات بمخططات بعد.", "No topology threads yet.")
+                : t("لا توجد محادثات محفوظة بعد.", "No saved conversations yet.")}
             </p>
             <p className="text-[11px] opacity-75">
               {t(
@@ -295,22 +330,22 @@ export function ChatSidebar({
       </div>
 
       {/* Quick Templates Trigger */}
-      <div className="shrink-0 border-t px-2.5 py-2">
+      <div className="shrink-0 border-t border-border/50 px-2.5 py-2">
         <button
           type="button"
           onClick={() => {
             onOpenTemplates();
             onCloseMobile?.();
           }}
-          className="flex w-full items-center gap-2 rounded-xl border bg-background/60 px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-foreground"
+          className="glass-pill flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium text-muted-foreground transition-all hover:border-primary/40 hover:text-foreground"
         >
-          <BookOpen className="h-4 w-4 text-cyan" />
+          <BookOpen className="h-4 w-4 text-primary" />
           {t("مكتبة القوالب الهندسية", "Engineering Templates")}
         </button>
       </div>
 
       {/* Bottom Profile & Settings Bar */}
-      <div className="shrink-0 border-t bg-muted/20 p-2.5">
+      <div className="shrink-0 border-t border-border/50 bg-background/30 p-2.5">
         <div className="flex items-center gap-2">
           <Link
             to="/profile"

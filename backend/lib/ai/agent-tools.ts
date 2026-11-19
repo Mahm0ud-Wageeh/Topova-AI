@@ -28,7 +28,11 @@ import type {
   NetworkPlan,
   PacketTraceResult,
 } from "@/lib/network-engine/types";
-import type { ThinkingStep } from "../../src/storage/types";
+import type {
+  ChatExportCard,
+  ExportCardKind,
+  ThinkingStep,
+} from "../../src/storage/types";
 import type { AgentToolExecution } from "./agent";
 
 const VALID_DEVICE_TYPES = new Set<DeviceType>([
@@ -75,6 +79,94 @@ export interface MutableContext {
   attack?: AttackSimulationResult;
   bom?: BomEstimateReport;
   cliOutput?: { deviceId: string; command: string; output: string };
+  exportCards?: ChatExportCard[];
+}
+
+export const EXPORT_CARD_CATALOG: Record<ExportCardKind, ChatExportCard> = {
+  "pt-guide": {
+    id: "pt-guide",
+    format: ".html",
+    titleAr: "دليل بناء Cisco Packet Tracer التفاعلي",
+    titleEn: "Cisco Packet Tracer Interactive Build Guide",
+    descAr: "يفتح في المتصفح ويعرض موديلات الأجهزة، خريطة المنافذ والكابلات، وزر نسخ أوامر كل جهاز بضغطة واحدة",
+    descEn: "Opens in browser with exact PT device models, port-to-port wiring, and 1-click CLI copy per device",
+    recommended: true,
+  },
+  "cisco-cfg": {
+    id: "cisco-cfg",
+    format: ".cfg",
+    titleAr: "ملف إعدادات Cisco IOS الجاهز (Startup Config)",
+    titleEn: "Cisco IOS Startup Configuration (.cfg)",
+    descAr: "ملف تشغيل نصي مباشر للتحميل داخل Packet Tracer عبر Config → Load أو اللصق في تبويب CLI",
+    descEn: "Direct Cisco IOS config file — load via Device → Config → Load or paste into CLI",
+    recommended: true,
+  },
+  "cabling-csv": {
+    id: "cabling-csv",
+    format: ".csv",
+    titleAr: "جدول توصيل المنافذ والكابلات",
+    titleEn: "Port-to-Port Cabling Matrix",
+    descAr: "جدول Excel/CSV دقيق يوضح كل وصلة ومنفذ ونوع الكابل بين أجهزة الشبكة",
+    descEn: "Exact spreadsheet of every interface, cable type, and device link",
+  },
+  "cml-yaml": {
+    id: "cml-yaml",
+    format: ".yaml",
+    titleAr: "ملف مختبر Cisco Modeling Labs (CML)",
+    titleEn: "Cisco Modeling Labs Topology (.yaml)",
+    descAr: "يُستورد مباشرة في Cisco CML 2.x عبر Import Lab بكامل الأجهزة والروابط والإعدادات",
+    descEn: "Direct import into Cisco CML 2.x with full nodes, links, coordinates & IOS configs",
+  },
+  "gns3-project": {
+    id: "gns3-project",
+    format: ".gns3",
+    titleAr: "ملف مشروع GNS3 المباشر",
+    titleEn: "GNS3 Native Project (.gns3)",
+    descAr: "يُفتح مباشرة في GNS3 عبر File → Open Project مع جميع الوصلات والرموز الهندسية",
+    descEn: "Opens directly in GNS3 via File → Open Project with pre-mapped interfaces",
+  },
+  "pdf-report": {
+    id: "pdf-report",
+    format: ".pdf",
+    titleAr: "التقرير الهندسي التنفيذي PDF",
+    titleEn: "Executive Engineering Report (.pdf)",
+    descAr: "تقرير جاهز للطباعة والمناقشة يضم خطة العناوين، تقييم الأمان، وميزانية الأجهزة والطاقة",
+    descEn: "Presentation-ready report with IP addressing, security score, and BOM/PoE budget",
+  },
+  "pt-pack": {
+    id: "pt-pack",
+    format: ".zip",
+    titleAr: "الحزمة الشاملة لـ Packet Tracer (اختياري)",
+    titleEn: "Complete Packet Tracer Bundle (.zip)",
+    descAr: "تجمع كل ملفات .cfg لكل جهاز على حدة + الدليل التفاعلي + جدول الكابلات في ملف مضغوط واحد",
+    descEn: "Bundles every per-device .cfg, interactive HTML guide, and cabling CSV together",
+  },
+};
+
+export function selectExportCardsForTarget(target: string): ChatExportCard[] {
+  const lower = target.toLowerCase();
+  if (/(gns3)/.test(lower)) {
+    return [EXPORT_CARD_CATALOG["gns3-project"], EXPORT_CARD_CATALOG["cisco-cfg"]];
+  }
+  if (/(cml|yaml)/.test(lower)) {
+    return [EXPORT_CARD_CATALOG["cml-yaml"], EXPORT_CARD_CATALOG["cisco-cfg"]];
+  }
+  if (/(pdf|report|تقرير)/.test(lower)) {
+    return [EXPORT_CARD_CATALOG["pdf-report"], EXPORT_CARD_CATALOG["cabling-csv"]];
+  }
+  if (/(csv|cabl|كابل|منافذ|wiring)/.test(lower)) {
+    return [EXPORT_CARD_CATALOG["cabling-csv"], EXPORT_CARD_CATALOG["pt-guide"]];
+  }
+  if (/(cfg|cli|config|إعدادات|اعدادات|كونفيج|أوامر|اوامر)/.test(lower)) {
+    return [EXPORT_CARD_CATALOG["cisco-cfg"], EXPORT_CARD_CATALOG["pt-guide"]];
+  }
+  // Default for Packet Tracer / .pkt / .ptk / general export
+  return [
+    EXPORT_CARD_CATALOG["pt-guide"],
+    EXPORT_CARD_CATALOG["cisco-cfg"],
+    EXPORT_CARD_CATALOG["cabling-csv"],
+    EXPORT_CARD_CATALOG["cml-yaml"],
+  ];
 }
 
 function toolLabel(name: string, ar: boolean): string {
@@ -104,6 +196,10 @@ function toolLabel(name: string, ar: boolean): string {
     run_device_cli: [
       "تنفيذ أمر سطر أوامر سيسكو",
       "Executed live Cisco IOS CLI",
+    ],
+    prepare_file_export: [
+      "تجهيز ملفات التصدير المباشرة",
+      "Prepared direct deliverable files",
     ],
   };
   return labels[name]?.[ar ? 0 : 1] ?? name;
@@ -426,6 +522,42 @@ export function executeAgentTool(
       status: "done",
     });
     return { ok: true, deviceId: devId, command, output: result.output };
+  }
+
+  if (name === "prepare_file_export") {
+    if (!ctx.topology.devices.length) {
+      return {
+        ok: false,
+        error: ar
+          ? "لا يوجد تصميم شبكة نشط حالياً للتصدير. صمّم شبكة أولاً ثم اطلب تصدير الملفات."
+          : "No active network topology to export yet. Design a network first, then request exports.",
+      };
+    }
+    const target = String(args.target ?? "packet-tracer").trim();
+    const cards = selectExportCardsForTarget(target);
+    ctx.exportCards = cards;
+    const summary = ar
+      ? `تم تجهيز ${cards.length} ملفات مباشرة للتحميل (${cards.map((c) => c.format).join("، ")})`
+      : `Prepared ${cards.length} direct downloadable files (${cards.map((c) => c.format).join(", ")})`;
+    ctx.toolCalls.push({ name, args, summary, mutated: false });
+    ctx.thinkingSteps.push({
+      title: toolLabel(name, ar),
+      detail: summary,
+      status: "done",
+    });
+    return {
+      ok: true,
+      target,
+      deviceCount: ctx.topology.devices.length,
+      linkCount: ctx.topology.connections.length,
+      files: cards.map((c) => ({
+        id: c.id,
+        format: c.format,
+        title: ar ? c.titleAr : c.titleEn,
+      })),
+      packetTracerNote:
+        "Cisco's binary .pkt format is proprietary/encrypted; direct Cisco IOS .cfg startup configs + interactive HTML Packet Tracer build guide + cabling CSV + direct CML .yaml / GNS3 .gns3 files are attached inline in the chat for 1-click download.",
+    };
   }
 
   return { ok: false, error: `Unknown tool: ${name}` };

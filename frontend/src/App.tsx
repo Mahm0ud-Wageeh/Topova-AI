@@ -3,6 +3,12 @@ import { lazy, Suspense } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Toaster } from "sonner";
 import { TopovaMark } from "@/components/brand/topova-logo";
+import {
+  ClerkOptionalProvider,
+  ClerkSessionWatcher,
+  ClerkSsoCallbackPage,
+  ClerkSsoCompletePage,
+} from "@/components/auth/clerk-bridge";
 import { AuthProvider } from "@/context/auth-context";
 import { LanguageProvider } from "@/context/language-context";
 import { ProfileProvider } from "@/context/profile-context";
@@ -64,6 +70,8 @@ function AppRoutes() {
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/auth" element={<AuthPage />} />
+          <Route path="/auth/sso-callback" element={<ClerkSsoCallbackPage />} />
+          <Route path="/auth/sso-complete" element={<ClerkSsoCompletePage />} />
           <Route path="/sign-in" element={<Navigate to="/auth" replace />} />
           <Route path="/sign-up" element={<Navigate to="/auth" replace />} />
           <Route path="/privacy" element={<PrivacyPage />} />
@@ -91,17 +99,20 @@ function AppRoutes() {
 export function App() {
   return (
     <MotionConfig reducedMotion="user">
-      <ThemeProvider>
-        <LanguageProvider>
-          <AuthProvider>
-            <ProfileProvider>
-              <BrowserRouter>
-                <AppRoutes />
-              </BrowserRouter>
-            </ProfileProvider>
-          </AuthProvider>
-        </LanguageProvider>
-      </ThemeProvider>
+      <ClerkOptionalProvider>
+        <ThemeProvider>
+          <LanguageProvider>
+            <AuthProvider>
+              <ClerkSessionWatcher />
+              <ProfileProvider>
+                <BrowserRouter>
+                  <AppRoutes />
+                </BrowserRouter>
+              </ProfileProvider>
+            </AuthProvider>
+          </LanguageProvider>
+        </ThemeProvider>
+      </ClerkOptionalProvider>
     </MotionConfig>
   );
 }

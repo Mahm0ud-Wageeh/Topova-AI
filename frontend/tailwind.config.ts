@@ -34,8 +34,10 @@ const config: Config = {
         mono: ["var(--font-mono, ui-monospace)", "monospace"],
       },
       boxShadow: {
-        glow: "0 0 0 1px hsl(var(--primary) / 0.4), 0 0 20px hsl(var(--primary) / 0.25)",
-        "glow-cyan": "0 0 0 1px hsl(var(--cyan) / 0.4), 0 0 20px hsl(var(--cyan) / 0.25)",
+        glow: "0 1px 2px rgba(0, 0, 0, 0.08), 0 8px 20px -10px hsl(var(--primary) / 0.28)",
+        "glow-cyan": "0 1px 2px rgba(0, 0, 0, 0.08), 0 8px 20px -10px hsl(var(--cyan) / 0.24)",
+        surface: "0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px -12px rgba(0, 0, 0, 0.08)",
+        elevated: "0 2px 6px rgba(0, 0, 0, 0.06), 0 18px 40px -16px rgba(0, 0, 0, 0.14)",
       },
     },
   },

@@ -31,7 +31,7 @@ export function Navbar() {
   ];
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b bg-background/85 backdrop-blur-xl">
+    <header className="glass-panel sticky top-0 z-40 w-full border-x-0 border-t-0">
       <div className="container flex h-16 items-center justify-between gap-2 px-3 sm:px-6">
         <Link to="/" className="flex shrink-0 items-center">
           <TopovaLogo size={34} showBadge />

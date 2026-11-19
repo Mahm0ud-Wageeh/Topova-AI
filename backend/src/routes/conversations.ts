@@ -65,10 +65,10 @@ const sendMessageSchema = z.object({
       z.object({
         name: z.string().trim().min(1).max(120),
         mimeType: z.string().max(80).optional(),
-        content: z.string().max(64_000),
+        content: z.string().max(2_500_000),
       }),
     )
-    .max(3)
+    .max(4)
     .optional(),
   state: z
     .object({
@@ -408,11 +408,14 @@ export function conversationsRouter(store: DataStore) {
         };
       }
 
+      const replyIsAr =
+        agentResult.detectedLang === "ar" ||
+        (agentResult.detectedLang === undefined && parsed.lang === "ar");
       const assistantMsg: StoredChatMessage = {
         id: makeMsgId("a"),
         role: "assistant",
         content: requiresReview
-          ? `${parsed.lang === "ar" ? "تعديلات مقترحة بانتظار مراجعتك." : "Proposed changes awaiting your review."}\n\n${agentResult.reply}`
+          ? `${replyIsAr ? "تعديلات مقترحة بانتظار مراجعتك." : "Proposed changes awaiting your review."}\n\n${agentResult.reply}`
           : agentResult.reply,
         createdAt: new Date().toISOString(),
         mode,
@@ -421,6 +424,7 @@ export function conversationsRouter(store: DataStore) {
         followUpSuggestions: agentResult.followUpSuggestions,
         clarifyingQuestions: agentResult.clarifyingQuestions,
         cliOutput: agentResult.cliOutput,
+        exportCards: agentResult.exportCards,
         hasTopologyUpdate: agentResult.mutated && !requiresReview,
         topologySummary,
       };

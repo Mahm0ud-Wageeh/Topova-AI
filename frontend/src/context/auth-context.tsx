@@ -19,6 +19,7 @@ interface AuthContextValue {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
+  syncClerkSession: (clerkToken: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -27,6 +28,7 @@ const AuthContext = createContext<AuthContextValue>({
   loading: false,
   login: async () => {},
   register: async () => {},
+  syncClerkSession: async () => {},
   logout: async () => {},
 });
 
@@ -84,14 +86,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(res.user);
   }
 
+  async function syncClerkSession(clerkToken: string) {
+    const res = await apiRequest<{ token: string; user: AuthUser }>(
+      "/api/v1/auth/clerk-sync",
+      {
+        method: "POST",
+        body: { token: clerkToken },
+      },
+    );
+    setAuthToken(res.token);
+    setUser(res.user);
+  }
+
   async function logout() {
     await apiRequest("/api/v1/auth/logout", { method: "POST" });
     setAuthToken(null);
     setUser(null);
+    window.dispatchEvent(new Event("nettopo:logout"));
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider
+      value={{ user, loading, login, register, syncClerkSession, logout }}
+    >
       {children}
     </AuthContext.Provider>
   );

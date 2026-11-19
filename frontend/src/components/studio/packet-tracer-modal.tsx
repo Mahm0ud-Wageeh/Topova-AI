@@ -326,16 +326,16 @@ export function PacketTracerExportModal({
 
   return (
     <Modal
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3 backdrop-blur-sm sm:p-6"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-3 backdrop-blur-md sm:p-6"
       open={open}
       onClose={onClose}
       label="Export network design"
     >
-      <div className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border bg-card shadow-2xl">
+      <div className="glass-panel flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl">
         {/* Modal Header */}
-        <div className="flex items-center justify-between gap-3 border-b bg-gradient-to-r from-primary/10 via-card to-cyan/10 px-5 py-4">
+        <div className="flex items-center justify-between gap-3 border-b border-border/60 px-5 py-4">
           <div className="flex items-center gap-3 min-w-0">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-primary to-cyan text-white shadow-glow">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground shadow-sm">
               <Network className="h-5 w-5" />
             </span>
             <div className="min-w-0">
@@ -400,17 +400,28 @@ export function PacketTracerExportModal({
               </li>
             ))}
           </ul>
-          <label className="flex min-h-11 cursor-pointer items-center gap-2">
+          <label
+            className={`mt-2 flex min-h-11 cursor-pointer items-center gap-2.5 rounded-xl border px-3 py-2 text-xs font-medium transition-colors ${
+              !preflight.ready
+                ? "border-destructive/30 bg-destructive/5 opacity-60 cursor-not-allowed"
+                : acknowledged
+                  ? "border-emerald-600/35 bg-emerald-500/10 text-foreground"
+                  : "border-primary/45 bg-primary/8 text-foreground hover:bg-primary/12"
+            }`}
+          >
             <input
               type="checkbox"
               checked={acknowledged}
               onChange={(event) => setAcknowledged(event.target.checked)}
               disabled={!preflight.ready}
+              className="h-4 w-4 accent-primary"
             />
-            {t(
-              "راجعت التحذيرات وسأتحقق من الإعدادات في المختبر",
-              "I reviewed the warnings and will validate these configurations in the lab",
-            )}
+            <span>
+              {t(
+                "راجعت التنبيهات وسأتحقق من الإعدادات في المختبر (اضغط هنا لتفعيل التحميل)",
+                "I reviewed the warnings and will validate these configurations in the lab (check to enable downloads)",
+              )}
+            </span>
           </label>
         </section>
         {/* Mode Switcher: Packet Tracer First + Secondary Advanced Labs */}

@@ -30,10 +30,10 @@ import {
 import { useTheme } from "@/context/theme-context";
 
 const ACCENT_PALETTES: { id: AccentTheme; labelAr: string; labelEn: string; swatch: string }[] = [
-  { id: "blue", labelAr: "أزرق كهربائي", labelEn: "Electric Blue", swatch: "bg-blue-500" },
-  { id: "cyan", labelAr: "سماوي سيبراني", labelEn: "Cyber Cyan", swatch: "bg-cyan-500" },
-  { id: "emerald", labelAr: "أخضر هندسي", labelEn: "Emerald NOC", swatch: "bg-emerald-500" },
-  { id: "violet", labelAr: "بنفسجي ملكي", labelEn: "Royal Violet", swatch: "bg-violet-500" },
+  { id: "blue", labelAr: "أزرق كوبالت", labelEn: "Architectural Cobalt", swatch: "bg-blue-600" },
+  { id: "cyan", labelAr: "تركواز محيطي", labelEn: "Ocean Teal", swatch: "bg-sky-600" },
+  { id: "emerald", labelAr: "أخضر هندسي", labelEn: "Forest Emerald", swatch: "bg-emerald-600" },
+  { id: "violet", labelAr: "نيلي كلاسيكي", labelEn: "Slate Indigo", swatch: "bg-indigo-600" },
 ];
 
 export function SettingsPage() {

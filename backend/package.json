@@ -8,6 +8,7 @@
     "build": "tsc --noEmit --incremental false -p tsconfig.json"
   },
   "dependencies": {
+    "@clerk/backend": "^3.31.1",
     "@google/genai": "^3.6.1",
     "@nettopo/shared": "*",
     "@prisma/client": "^5.20.0",

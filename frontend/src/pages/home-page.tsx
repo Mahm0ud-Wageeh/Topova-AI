@@ -1,373 +1,356 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
+import { Navigate, useNavigate } from "react-router-dom";
+import { AnimatePresence, motion } from "framer-motion";
 import {
-  Activity,
+  ArrowLeft,
   ArrowRight,
-  Brain,
-  CheckCircle2,
-  Download,
-  LogIn,
+  Check,
+  FileCode2,
+  Globe,
   MessageSquare,
+  Moon,
   Network,
-  Play,
-  Send,
-  ShieldAlert,
-  Sparkles,
-  User,
+  ShieldCheck,
+  Sun,
 } from "lucide-react";
-import { TopovaMark } from "@/components/brand/topova-logo";
-import { Footer } from "@/components/layout/footer";
-import { Navbar } from "@/components/layout/navbar";
-import { Badge } from "@/components/ui/badge";
+import { TopovaLogo, TopovaMark } from "@/components/brand/topova-logo";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/context/auth-context";
 import { useLanguage } from "@/context/language-context";
+import { useTheme } from "@/context/theme-context";
 
-const STARTERS = [
-  {
-    ar: "صمّم شبكة شركة كاملة مع OSPF و VLANs",
-    en: "Design an Enterprise Campus with OSPF & VLANs",
-    promptAr:
-      "صمّم لي شبكة مقر شركة متكامل: 2 راوتر، جدار حماية، 2 سويتش، 2 سيرفر، 8 أجهزة كمبيوتر، 2 أكسس بوينت، و 4 كاميرات مع عزل VLANs و OSPF ثم افحص الأمان.",
-    promptEn:
-      "Design an enterprise campus with 2 routers, 1 firewall, 2 switches, 2 servers, 8 PCs, 2 APs, and 4 cameras using VLAN segmentation and OSPF, then run a security audit.",
-  },
-  {
-    ar: "خطّط معي مشروع تخرج شبكات بأسئلة ذكية",
-    en: "Plan a Network Architecture via Guided Questions",
-    promptAr:
-      "أريد تصميم شبكة احترافية لمشروع تخرج. اسألني أولاً أسئلة توضيحية سريعة لتحديد الحجم والأقسام والأمان والميزانية قبل التصميم.",
-    promptEn:
-      "I want to architect a flagship network for my project. Ask me clarifying questions on scale, departments, security & budget before designing it.",
-  },
-  {
-    ar: "شبكة كاميرات مراقبة + ميزانية PoE",
-    en: "Smart CCTV + PoE+ Wattage Budget",
-    promptAr: "صمّم شبكة مراقبة بـ راوتر، فايروول، سويتش، NVR، و 6 كاميرات مراقبة و 4 أجهزة كمبيوتر مع VLANs واحسب طاقة PoE.",
-    promptEn: "Design a CCTV surveillance branch with 1 router, 1 firewall, 1 switch, 1 NVR, 6 IP cameras & 4 PCs with VLANs and calculate the PoE budget.",
-  },
-  {
-    ar: "اشرح الفرق بين OSPF و EIGRP و BGP",
-    en: "Compare OSPF vs EIGRP vs BGP",
-    promptAr: "اشرح لي الفرق الهندسي العملي بين OSPF و EIGRP و BGP ومتى أختار كل بروتوكول في الشبكات الحقيقية.",
-    promptEn: "Explain the practical engineering differences between OSPF, EIGRP, and BGP and when to choose each in production networks.",
-  },
-];
+export const ONBOARDING_STORAGE_KEY = "topova:onboarding:completed";
+
+function isOnboardingCompleted(): boolean {
+  try {
+    return localStorage.getItem(ONBOARDING_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function markOnboardingCompleted(): void {
+  try {
+    localStorage.setItem(ONBOARDING_STORAGE_KEY, "1");
+  } catch {
+    // ignore storage restrictions
+  }
+}
 
 export function HomePage() {
   const navigate = useNavigate();
-  const { lang, t } = useLanguage();
-  const { user } = useAuth();
-  const [prompt, setPrompt] = useState("");
+  const { user, loading: authLoading } = useAuth();
+  const { lang, toggleLang, t } = useLanguage();
+  const { theme, toggleTheme } = useTheme();
+  const [step, setStep] = useState(0);
 
-  function launchChat(textOverride?: string) {
-    const q = (textOverride ?? prompt).trim();
-    if (q.length >= 2) {
-      try {
-        sessionStorage.setItem("nettopo:chat:seed", q);
-      } catch {
-        // ignore storage restrictions
-      }
-    }
-    navigate("/chat");
+  // Returning users or already signed-in users go straight to the workspace — Welcome never reappears.
+  if (!authLoading && (user || isOnboardingCompleted())) {
+    return <Navigate to="/chat" replace />;
   }
 
-  const pillars = [
-    {
-      icon: Brain,
-      title: t("ذكاء اصطناعي يفكّر ويخطّط معك", "Visible Thinking & Guided Questions"),
-      desc: t(
-        "يعرض خطوات التفكير والتحليل بوضوح، ويقترح أسئلة تفاعلية ذكية بعد كل رد لتوجيه تصميمك نحو أفضل نتيجة هندسية.",
-        "Transparent step-by-step reasoning accordion, interactive clarifying questions, and contextual follow-up suggestions on every turn.",
-      ),
-    },
-    {
-      icon: Network,
-      title: t("لوحة مخطط حية بجانب المحادثة", "Live Interactive Blueprint Canvas"),
-      desc: t(
-        "بمجرد وصف الشبكة في الشات، يُفتح المخطط المعماري التفاعلي فوراً بمنافذ سيسكو الحقيقية والعناوين والشبكات الافتراضية.",
-        "Your network diagram materializes automatically beside the chat with Cisco port labels, IPv4/VLAN badges, and 3 auto-layouts.",
-      ),
-    },
-    {
-      icon: Download,
-      title: t("تصدير احترافي لـ Cisco Packet Tracer", "Cisco Packet Tracer 8.x Export Center"),
-      desc: t(
-        "حزمة جاهزة بملفات تشغيل startup .cfg لكل جهاز، ونصوص لصق سريعة للـ CLI، وجدول كابلات، ودليل تفاعلي خطوة بخطوة.",
-        "One-click Packet Tracer 8.x bundle with per-device startup .cfg files, instant CLI paste scripts, cabling CSV & interactive HTML guide.",
-      ),
-    },
-    {
-      icon: ShieldAlert,
-      title: t("اختبار اختراق وتدقيق أمان من ١٠٠", "Red-Team & Zero-Trust Security Auditor"),
-      desc: t(
-        "حاكي الانتشار الجانبي للهجمات، اكتشف نقاط الفشل الوحيدة، وطبّق التأمين التلقائي وقواعد الحماية بضغطة زر.",
-        "Simulate lateral movement attacks, uncover Tarjan single points of failure, and auto-harden topologies with Zero-Trust ACLs.",
-      ),
-    },
-    {
-      icon: Play,
-      title: t("محاكي حزم حي وطرفية أوامر سيسكو", "Live Packet Flow & Interactive CLI"),
-      desc: t(
-        "تتبّع الحزم قفزة بقفزة مع فحص ACL، واقطع الكابلات في وضع الفوضى، ونفّذ أوامر Cisco IOS حقيقية على كل جهاز.",
-        "Animate L2/L3 packets hop-by-hop, cut cables live in Chaos mode, and double-click any device for an interactive IOS terminal.",
-      ),
-    },
-    {
-      icon: User,
-      title: t("مساحة عمل شخصية بمحادثات وذاكرة", "Multi-Chat Workspace, Profile & Memory"),
-      desc: t(
-        "إدارة كل محادثاتك مع البحث والتثبيت، وملف شخصي وإعدادات مخصصة تحفظ أسلوبك الهندسي وتفضيلاتك في كل جلسة.",
-        "Organize pinned chats, search history, customize AI memory & engineering defaults, and switch accent themes seamlessly.",
-      ),
-    },
-  ];
+  function finish(destination: "/chat" | "/auth" = "/chat") {
+    markOnboardingCompleted();
+    navigate(destination, { replace: true });
+  }
+
+  const totalSteps = 3;
+  const isLast = step === totalSteps - 1;
 
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <Navbar />
+    <div className="glass-canvas-bg flex min-h-[100dvh] flex-col text-foreground">
+      {/* Minimal Top Bar */}
+      <header className="flex h-16 shrink-0 items-center justify-between px-5 sm:px-8">
+        <TopovaLogo size={28} compact />
 
-      <main className="flex-1">
-        {/* Hero Welcome & Gateway Section */}
-        <section className="relative overflow-hidden border-b">
-          <div className="pointer-events-none absolute inset-0 cyber-grid" aria-hidden />
-          <div className="pointer-events-none absolute inset-0 brand-glow" aria-hidden />
+        <div className="flex items-center gap-1.5">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={toggleLang}
+            className="h-8 gap-1.5 px-2.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+            aria-label={t("تبديل اللغة", "Toggle language")}
+          >
+            <Globe className="h-3.5 w-3.5" />
+            {lang === "ar" ? "English" : "العربية"}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={toggleTheme}
+            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+            aria-label={t("تبديل المظهر", "Toggle theme")}
+          >
+            {theme === "dark" ? (
+              <Sun className="h-4 w-4" />
+            ) : (
+              <Moon className="h-4 w-4" />
+            )}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => finish("/chat")}
+            className="h-8 px-3 text-xs font-medium text-muted-foreground hover:text-foreground"
+          >
+            {t("تخطي", "Skip")}
+          </Button>
+        </div>
+      </header>
 
-          <div className="container relative py-14 sm:py-20 lg:py-24">
-            <div className="grid items-center gap-10 lg:grid-cols-12">
-              {/* Left / Primary Editorial Column */}
-              <div className="space-y-6 text-center lg:col-span-7 lg:text-start">
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                  <Badge variant="ai" className="gap-1.5 px-3 py-1 text-xs">
-                    <Sparkles className="h-3.5 w-3.5" />
-                    {t("منصة الذكاء الاصطناعي الأولى لهندسة الشبكات", "NEXT-GENERATION AI NETWORK ENGINEERING PLATFORM")}
-                  </Badge>
-                </motion.div>
-
-                <motion.h1
-                  initial={{ opacity: 0, y: 14 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.05 }}
-                  className="font-display text-4xl font-bold tracking-tight sm:text-5xl xl:text-6xl"
-                >
-                  {t("تحدّث مع أقوى مهندس شبكات ذكي", "Meet Your Autonomous AI")}
-                  <br />
-                  <span className="bg-gradient-to-r from-primary via-cyan to-emerald-400 bg-clip-text text-transparent">
-                    {t("يصمّم، يحاكي، ويصدّر لـ Packet Tracer", "Network Architect & Studio")}
-                  </span>
-                </motion.h1>
-
-                <motion.p
-                  initial={{ opacity: 0, y: 14 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.1 }}
-                  className="mx-auto max-w-2xl text-base leading-relaxed text-muted-foreground lg:mx-0 sm:text-lg"
-                >
-                  {t(
-                    "منصة محادثة احترافية متكاملة لمهندسي الشبكات والطلاب: اكتب أي سؤال أو وصف شبكة، شاهد خطوات التفكير والمخطط التفاعلي لحظياً، اختبر الأمان والاختراق، وصدّر حزمة Cisco Packet Tracer الجاهزة بضغطة زر.",
-                    "A full conversational AI engineering platform: ask anything, watch structured reasoning unfold, inspect live interactive topologies beside your chat, run Red-Team & packet simulations, and export directly to Cisco Packet Tracer.",
-                  )}
-                </motion.p>
-
-                {/* Primary Entry Gateway: Guest vs Account */}
-                <motion.div
-                  initial={{ opacity: 0, y: 14 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.14 }}
-                  className="flex flex-wrap items-center justify-center gap-3 lg:justify-start"
-                >
-                  <Button
-                    size="lg"
-                    className="h-12 gap-2 rounded-xl px-6 text-sm font-bold shadow-glow"
-                    onClick={() => launchChat()}
-                  >
-                    <MessageSquare className="h-4 w-4" />
-                    {user
-                      ? t("افتح مساحة المحادثة الآن", "Open AI Workspace")
-                      : t("المتابعة كضيف — ابدأ الشات فوراً", "Continue as Guest — Start Chatting")}
-                    <ArrowRight className="h-4 w-4 rtl:rotate-180" />
-                  </Button>
-
-                  {user ? (
-                    <Button asChild size="lg" variant="outline" className="h-12 gap-2 rounded-xl px-5">
-                      <Link to="/profile">
-                        <User className="h-4 w-4 text-cyan" />
-                        {t("ملفي الشخصي وإعداداتي", "Profile & Settings")}
-                      </Link>
-                    </Button>
-                  ) : (
-                    <Button asChild size="lg" variant="outline" className="h-12 gap-2 rounded-xl px-5">
-                      <Link to="/auth">
-                        <LogIn className="h-4 w-4 text-cyan" />
-                        {t("تسجيل الدخول / إنشاء حساب لحفظ محادثاتك", "Sign In / Create Account to Sync")}
-                      </Link>
-                    </Button>
-                  )}
-                </motion.div>
-
-                {/* Trust Highlights */}
-                <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 pt-1 text-xs text-muted-foreground lg:justify-start">
-                  <span className="flex items-center gap-1.5">
-                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
-                    {t("يعمل فوراً بدون تسجيل إجباري", "Instant Guest Mode")}
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
-                    {t("حفظ تلقائي للمحادثات والمخططات", "Auto-Saved Threads & Blueprints")}
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
-                    {t("تصدير جاهز لـ Cisco Packet Tracer 8.x", "Cisco Packet Tracer 8.x Ready")}
-                  </span>
-                </div>
-              </div>
-
-              {/* Right Interactive Preview Card */}
-              <motion.div
-                initial={{ opacity: 0, scale: 0.97 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.16 }}
-                className="lg:col-span-5"
-              >
-                <Card className="overflow-hidden border-primary/30 bg-card/90 shadow-2xl backdrop-blur-xl">
-                  <div className="flex items-center justify-between border-b bg-muted/40 px-4 py-2.5 text-xs">
-                    <span className="flex items-center gap-2 font-display font-bold">
-                      <TopovaMark size={20} />
-                      Topova AI Workspace
-                    </span>
-                    <Badge variant="secondary" className="font-mono text-[10px]">
-                      Packet Tracer Ready
-                    </Badge>
-                  </div>
-
-                  <CardContent className="space-y-3 p-4">
-                    {/* Simulated Live Thinking Preview */}
-                    <div className="rounded-xl border border-cyan/30 bg-cyan/5 p-3 text-xs space-y-1.5">
-                      <div className="flex items-center gap-1.5 font-semibold text-cyan">
-                        <Brain className="h-3.5 w-3.5" />
-                        <span>{t("خطوات التفكير والتحليل الذكي", "Autonomous Reasoning Trace")}</span>
-                      </div>
-                      <div className="space-y-1 text-[11px] text-muted-foreground">
-                        <p className="flex items-center gap-1.5">
-                          <CheckCircle2 className="h-3 w-3 text-emerald-400" />
-                          {t("تصميم 13 جهازاً بـ 4 شبكات VLAN وبروتوكول OSPF", "Architected 13 nodes · 4 VLANs · OSPF")}
-                        </p>
-                        <p className="flex items-center gap-1.5">
-                          <CheckCircle2 className="h-3 w-3 text-emerald-400" />
-                          {t("تقييم الأمان 96/100 + قواعد Zero-Trust ACL", "Security Score 96/100 · Zero-Trust ACLs")}
-                        </p>
-                        <p className="flex items-center gap-1.5">
-                          <CheckCircle2 className="h-3 w-3 text-emerald-400" />
-                          {t("تجهيز حزمة Cisco Packet Tracer مع دليل التوصيل", "Packaged Cisco Packet Tracer startup configs")}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Instant Prompt Composer right on Welcome */}
-                    <form
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                        launchChat();
-                      }}
-                      className="space-y-2.5"
-                    >
-                      <textarea
-                        rows={3}
-                        dir="auto"
-                        value={prompt}
-                        onChange={(e) => setPrompt(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && !e.shiftKey) {
-                            e.preventDefault();
-                            launchChat();
-                          }
-                        }}
-                        placeholder={t(
-                          "جرّب الآن: صمّم لي شبكة مستشفى أو شركة، أو اسأل أي سؤال في الشبكات...",
-                          "Try now: Design a hospital or enterprise network, or ask any networking question...",
-                        )}
-                        className="w-full resize-none rounded-xl border bg-background px-3 py-2.5 text-sm leading-relaxed focus:border-primary focus:outline-none"
-                      />
-                      <Button type="submit" className="w-full gap-2 rounded-xl">
-                        <Send className="h-4 w-4" />
-                        {t("أرسل وابدأ المحادثة الذكية", "Send & Launch AI Chat")}
-                      </Button>
-                    </form>
-
-                    {/* Clickable Starters */}
-                    <div className="flex flex-wrap gap-1.5 pt-1">
-                      {STARTERS.map((s) => (
-                        <button
-                          key={s.en}
-                          type="button"
-                          onClick={() => launchChat(lang === "ar" ? s.promptAr : s.promptEn)}
-                          className="inline-flex items-center gap-1 rounded-full border bg-background/80 px-2.5 py-1 text-[10px] text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground"
-                        >
-                          <Sparkles className="h-2.5 w-2.5 text-cyan" />
-                          {t(s.ar, s.en)}
-                        </button>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            </div>
-          </div>
-        </section>
-
-        {/* Flagship Capabilities Bento */}
-        <section className="container py-16">
-          <div className="mb-10 text-center">
-            <Badge variant="secondary" className="mb-3">
-              {t("كل أدوات مهندس الشبكات في منصة واحدة", "COMPLETE AI ENGINEERING ECOSYSTEM")}
-            </Badge>
-            <h2 className="font-display text-3xl font-bold sm:text-4xl">
-              {t("قوة منصات المحادثة العالمية مع محرك شبكات حقيقي", "World-Class AI Chat Powered by Real Network Engines")}
-            </h2>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {pillars.map((item) => (
-              <Card key={item.title} className="h-full transition-all hover:border-primary/50 hover:shadow-md">
-                <CardHeader className="pb-2.5">
-                  <span className="mb-2 grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary">
-                    <item.icon className="h-5 w-5" />
-                  </span>
-                  <CardTitle className="text-base">{item.title}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm leading-6 text-muted-foreground">{item.desc}</p>
-                </CardContent>
-              </Card>
+      {/* Centered Single-Focus Stepper Canvas */}
+      <main className="flex flex-1 flex-col items-center justify-center px-5 py-8 sm:px-8">
+        <div className="w-full max-w-lg">
+          {/* Progress Indicator */}
+          <div
+            className="mb-8 flex items-center gap-2"
+            role="progressbar"
+            aria-valuenow={step + 1}
+            aria-valuemin={1}
+            aria-valuemax={totalSteps}
+          >
+            {Array.from({ length: totalSteps }).map((_, idx) => (
+              <button
+                key={idx}
+                type="button"
+                aria-label={`${t("الخطوة", "Step")} ${idx + 1}`}
+                onClick={() => setStep(idx)}
+                className={`h-1.5 flex-1 rounded-full transition-colors duration-200 ${
+                  idx <= step ? "bg-primary" : "bg-border"
+                }`}
+              />
             ))}
           </div>
-        </section>
 
-        {/* Bottom CTA */}
-        <section className="border-t bg-muted/20 py-12">
-          <div className="container flex flex-col items-center justify-between gap-4 text-center sm:flex-row sm:text-start">
-            <div className="space-y-1">
-              <h3 className="font-display text-xl font-bold flex items-center justify-center gap-2 sm:justify-start">
-                <Activity className="h-5 w-5 text-cyan" />
-                {t("جاهز تبدأ أول مشروع شبكة مع المساعد الذكي؟", "Ready to launch your first AI network workspace?")}
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                {t("افتح المحادثة الآن كضيف أو سجّل حسابك المجاني لحفظ كل محادثاتك وإعداداتك.", "Start immediately in Guest Mode or sign in to sync your threads, profile, and topologies.")}
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button size="lg" className="gap-2 rounded-xl" onClick={() => launchChat()}>
-                <Sparkles className="h-4 w-4" />
-                {t("ابدأ الشات الآن", "Launch AI Chat")}
-              </Button>
+          <div className="surface-subtle overflow-hidden rounded-2xl p-6 sm:p-8">
+            <AnimatePresence mode="wait">
+              {step === 0 && (
+                <motion.div
+                  key="step-0"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.18, ease: "easeOut" }}
+                  className="space-y-6"
+                >
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl border bg-muted/60">
+                    <TopovaMark size={30} />
+                  </div>
+
+                  <div className="space-y-2.5">
+                    <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
+                      {t("مرحباً بك في Topova AI", "Welcome to Topova AI")}
+                    </h1>
+                    <p className="text-sm leading-7 text-muted-foreground sm:text-[15px]">
+                      {t(
+                        "مساحة عمل هندسية متكاملة لتصميم الشبكات، فحص الأمان، وتجهيز ملفات سيسكو الجاهزة من خلال محادثة ذكية بالعربية أو الإنجليزية.",
+                        "A focused network engineering workspace for designing topologies, auditing security, and generating ready-to-use Cisco configurations in English or Arabic.",
+                      )}
+                    </p>
+                  </div>
+
+                  {/* Quick Workspace Setup */}
+                  <div className="grid grid-cols-2 gap-3 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (lang !== "ar") toggleLang();
+                      }}
+                      className={`flex items-center justify-between rounded-xl border px-3.5 py-3 text-start transition-colors ${
+                        lang === "ar"
+                          ? "border-primary bg-primary/8 text-foreground"
+                          : "border-border bg-background/60 text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      <div>
+                        <p className="text-xs font-semibold">العربية</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          RTL واجهة
+                        </p>
+                      </div>
+                      {lang === "ar" && (
+                        <Check className="h-4 w-4 text-primary" />
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (lang !== "en") toggleLang();
+                      }}
+                      className={`flex items-center justify-between rounded-xl border px-3.5 py-3 text-start transition-colors ${
+                        lang === "en"
+                          ? "border-primary bg-primary/8 text-foreground"
+                          : "border-border bg-background/60 text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      <div>
+                        <p className="text-xs font-semibold">English</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          LTR Interface
+                        </p>
+                      </div>
+                      {lang === "en" && (
+                        <Check className="h-4 w-4 text-primary" />
+                      )}
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+
+              {step === 1 && (
+                <motion.div
+                  key="step-1"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.18, ease: "easeOut" }}
+                  className="space-y-6"
+                >
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl border bg-muted/60 text-primary">
+                    <MessageSquare className="h-5 w-5" />
+                  </div>
+
+                  <div className="space-y-2.5">
+                    <h2 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
+                      {t(
+                        "تحدّث بطبيعتك، والمخطط يُبنى أمامك",
+                        "Describe in natural language, inspect live",
+                      )}
+                    </h2>
+                    <p className="text-sm leading-7 text-muted-foreground sm:text-[15px]">
+                      {t(
+                        "يتعرف المساعد تلقائياً على لغة رسالتك (عربي أو إنجليزي) حتى لو بدّلت اللغة أثناء المحادثة، ويحوّل متطلباتك إلى مخطط تفاعلي مع تقييم أمان ومحاكاة حزم فورية.",
+                        "The assistant automatically matches your message language — even when switching between Arabic and English mid-chat — and builds a live topology with security audits and packet tracing.",
+                      )}
+                    </p>
+                  </div>
+
+                  <ul className="space-y-2.5 text-sm text-foreground/90">
+                    <li className="flex items-start gap-2.5">
+                      <Network className="mt-1 h-4 w-4 shrink-0 text-primary" />
+                      <span>
+                        {t(
+                          "بناء وتعديل مخططات VLANs و OSPF و BGP و Zero-Trust ACLs لحظياً",
+                          "Build and refine VLANs, OSPF, BGP, and Zero-Trust ACLs interactively",
+                        )}
+                      </span>
+                    </li>
+                    <li className="flex items-start gap-2.5">
+                      <ShieldCheck className="mt-1 h-4 w-4 shrink-0 text-primary" />
+                      <span>
+                        {t(
+                          "فحص نقاط الفشل الوحيدة ومحاكاة الهجمات الجانبية وإصلاحها تلقائياً",
+                          "Detect single points of failure, simulate attacks, and auto-harden",
+                        )}
+                      </span>
+                    </li>
+                  </ul>
+                </motion.div>
+              )}
+
+              {step === 2 && (
+                <motion.div
+                  key="step-2"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.18, ease: "easeOut" }}
+                  className="space-y-6"
+                >
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl border bg-muted/60 text-primary">
+                    <FileCode2 className="h-5 w-5" />
+                  </div>
+
+                  <div className="space-y-2.5">
+                    <h2 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
+                      {t(
+                        "ملفات سيسكو جاهزة للتحميل داخل الشات",
+                        "Direct Cisco deliverables right in chat",
+                      )}
+                    </h2>
+                    <p className="text-sm leading-7 text-muted-foreground sm:text-[15px]">
+                      {t(
+                        "عندما تطلب ملفات Cisco Packet Tracer أو إعدادات التشغيل أو تقرير PDF، تظهر لك بطاقات تحميل مباشرة لكل ملف مع شرح واضح لكيفية تشغيله خطوة بخطوة.",
+                        "Whenever you ask for Cisco Packet Tracer files, startup configs, CML/GNS3 topologies, or PDF reports, direct 1-click download cards appear right in the conversation with clear instructions.",
+                      )}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 text-xs font-mono text-muted-foreground">
+                    <span className="rounded-lg border bg-muted/50 px-2.5 py-1">
+                      Packet Tracer Guide (.html)
+                    </span>
+                    <span className="rounded-lg border bg-muted/50 px-2.5 py-1">
+                      Cisco IOS (.cfg)
+                    </span>
+                    <span className="rounded-lg border bg-muted/50 px-2.5 py-1">
+                      CML (.yaml)
+                    </span>
+                    <span className="rounded-lg border bg-muted/50 px-2.5 py-1">
+                      GNS3 (.gns3)
+                    </span>
+                    <span className="rounded-lg border bg-muted/50 px-2.5 py-1">
+                      Executive Report (.pdf)
+                    </span>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Step Navigation Footer */}
+            <div className="mt-8 flex items-center justify-between gap-3 border-t pt-5">
+              {step > 0 ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setStep((s) => Math.max(0, s - 1))}
+                  className="gap-1.5"
+                >
+                  <ArrowLeft className="h-4 w-4 rtl:rotate-180" />
+                  {t("السابق", "Back")}
+                </Button>
+              ) : (
+                <span className="text-xs tabular-nums text-muted-foreground">
+                  {t(`خطوة ${step + 1} من ${totalSteps}`, `Step ${step + 1} of ${totalSteps}`)}
+                </span>
+              )}
+
+              {isLast ? (
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => finish("/auth")}
+                  >
+                    {t("تسجيل الدخول", "Sign in")}
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => finish("/chat")}
+                    className="gap-1.5 px-5"
+                  >
+                    {t("ابدأ الآن", "Get Started")}
+                    <ArrowRight className="h-4 w-4 rtl:rotate-180" />
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  type="button"
+                  onClick={() => setStep((s) => Math.min(totalSteps - 1, s + 1))}
+                  className="gap-1.5 px-5"
+                >
+                  {t("التالي", "Next")}
+                  <ArrowRight className="h-4 w-4 rtl:rotate-180" />
+                </Button>
+              )}
             </div>
           </div>
-        </section>
+        </div>
       </main>
-
-      <Footer />
     </div>
   );
 }

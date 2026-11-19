@@ -5,6 +5,8 @@ import { defineConfig } from "vite";
 const backendTarget = process.env.NETTOPO_BACKEND_URL || "http://127.0.0.1:4000";
 
 export default defineConfig({
+  envDir: "..",
+  envPrefix: ["VITE_", "NEXT_PUBLIC_"],
   plugins: [react() as never],
   resolve: {
     alias: [

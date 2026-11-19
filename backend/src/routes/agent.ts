@@ -23,10 +23,10 @@ const agentChatSchema = z.object({
       z.object({
         name: z.string().trim().min(1).max(120),
         mimeType: z.string().max(80).optional(),
-        content: z.string().max(64_000),
+        content: z.string().max(2_500_000),
       }),
     )
-    .max(3)
+    .max(4)
     .optional(),
   history: z
     .array(

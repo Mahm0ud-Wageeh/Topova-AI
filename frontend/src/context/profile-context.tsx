@@ -64,10 +64,10 @@ interface ProfileContextValue {
 }
 
 const ACCENT_HSL: Record<AccentTheme, { primary: string; ring: string }> = {
-  blue: { primary: "217 91% 60%", ring: "217 91% 60%" },
-  cyan: { primary: "192 91% 46%", ring: "192 91% 46%" },
-  emerald: { primary: "158 76% 42%", ring: "158 76% 42%" },
-  violet: { primary: "263 83% 62%", ring: "263 83% 62%" },
+  blue: { primary: "215 70% 50%", ring: "215 70% 50%" },
+  cyan: { primary: "196 58% 42%", ring: "196 58% 42%" },
+  emerald: { primary: "158 56% 38%", ring: "158 56% 38%" },
+  violet: { primary: "234 48% 52%", ring: "234 48% 52%" },
 };
 
 const ProfileContext = createContext<ProfileContextValue | null>(null);

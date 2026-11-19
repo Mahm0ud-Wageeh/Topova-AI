@@ -65,22 +65,33 @@ export function checkExport(
     const uplinks = peers.filter((peer) =>
       ["SWITCH", "ROUTER", "FIREWALL"].includes(peer.type),
     ).length;
-    if (
-      device.type === "SWITCH" &&
-      (uplinks > 2 || links.length - uplinks > 24)
-    )
+    if (device.type === "SWITCH" && links.length > 26)
       findings.push({
         code: "SWITCH_PORT_CAPACITY",
         severity: "error",
         deviceId: device.id,
-        message: `${device.label} exceeds the selected 2960 profile (24 access ports + 2 uplinks). Split the network or select a supported design.`,
+        message: `${device.label} has ${links.length} links, exceeding 26 total ports on a 2960 switch. Add another switch to distribute connections.`,
       });
-    if (device.type === "ROUTER" && links.length > 3)
+    else if (device.type === "SWITCH" && (uplinks > 2 || links.length - uplinks > 24))
+      findings.push({
+        code: "SWITCH_UPLINK_PROFILE",
+        severity: "warning",
+        deviceId: device.id,
+        message: `${device.label} uses ${uplinks} uplinks (${links.length} total ports). In Packet Tracer, use a Catalyst 3560/3650 or configure FastEthernet ports as trunks.`,
+      });
+    if (device.type === "ROUTER" && links.length > 16)
       findings.push({
         code: "ROUTER_PORT_CAPACITY",
         severity: "error",
         deviceId: device.id,
-        message: `${device.label} requires ${links.length} interfaces; the default router profile supports 3.`,
+        message: `${device.label} requires ${links.length} interfaces, exceeding standard modular router slots. Add a distribution switch or second router.`,
+      });
+    else if (device.type === "ROUTER" && links.length > 3)
+      findings.push({
+        code: "ROUTER_MODULE_REQUIRED",
+        severity: "warning",
+        deviceId: device.id,
+        message: `${device.label} uses ${links.length} interfaces (base ISR 4331/2911 has 3). In Packet Tracer, insert a NIM-2GE-CU-SFP / HWIC expansion module in the Physical tab before loading.`,
       });
     if (
       !["ROUTER", "SWITCH", "FIREWALL", "AP"].includes(device.type) &&

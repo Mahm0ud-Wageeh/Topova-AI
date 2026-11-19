@@ -2,7 +2,11 @@ import { apiRequest } from "@/api/client";
 import { TopovaMark } from "@/components/brand/topova-logo";
 import { Button } from "@/components/ui/button";
 import { ChatComposer } from "@/components/workspace/chat-composer";
-import { ChatMarkdown } from "@/components/workspace/chat-markdown";
+import { ChatExportCards } from "@/components/workspace/chat-export-cards";
+import {
+  detectTextDirection,
+  StreamingChatMarkdown,
+} from "@/components/workspace/chat-markdown";
 import { ChatSidebar } from "@/components/workspace/chat-sidebar";
 import { CommandPaletteModal } from "@/components/workspace/command-palette";
 import { DesignReview } from "@/components/workspace/design-review";
@@ -184,6 +188,7 @@ export function ChatWorkspacePage() {
   const [input, setInput] = useState("");
   const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
   const [sending, setSending] = useState(false);
+  const [streamingMsgId, setStreamingMsgId] = useState<string | null>(null);
   const [thinkingTick, setThinkingTick] = useState(0);
   const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
 
@@ -262,6 +267,7 @@ export function ChatWorkspacePage() {
       abortControllerRef.current?.abort();
       abortControllerRef.current = null;
       setSending(false);
+      setStreamingMsgId(null);
     }
     if (!conversationId) {
       setActiveConv(null);
@@ -333,6 +339,7 @@ export function ChatWorkspacePage() {
 
   function handleNewChat() {
     setActiveConv(null);
+    setStreamingMsgId(null);
     setPacketTrace(null);
     setAttack(null);
     setArtifactOpen(false);
@@ -362,8 +369,14 @@ export function ChatWorkspacePage() {
     overrideText?: string,
     modeOverride?: AgentWorkMode,
   ) {
-    const text = (overrideText ?? input).trim();
-    if (!text || sending) return;
+    const rawText = (overrideText ?? input).trim();
+    const filesToSend = [...attachments];
+    if ((!rawText && filesToSend.length === 0) || sending) return;
+    const text =
+      rawText ||
+      (lang === "ar"
+        ? "حلّل المحتوى المرفق بالتفصيل وقدّم التوجيه الهندسي المناسب."
+        : "Analyze the attached content in detail and provide actionable engineering guidance.");
     if (activeConv?.pendingProposal) {
       toast.info(
         t("راجع التعديلات المقترحة أولاً.", "Review the pending changes first."),
@@ -383,7 +396,6 @@ export function ChatWorkspacePage() {
     }
 
     const chosenMode = modeOverride ?? mode;
-    const filesToSend = [...attachments];
     if (!overrideText) setInput("");
     setAttachments([]);
     setSending(true);
@@ -479,7 +491,7 @@ export function ChatWorkspacePage() {
             expectedVersion: currentDetail?.version ?? 1,
             message: text,
             mode: chosenMode,
-            lang,
+            lang: "auto",
             attachments: filesToSend.length > 0 ? filesToSend : undefined,
             state: currentDetail?.workspaceState
               ? {
@@ -500,6 +512,7 @@ export function ChatWorkspacePage() {
         return;
       failedRequest.current = null;
       if (res.result.executionMode) setEngineMode(res.result.executionMode);
+      setStreamingMsgId(res.assistantMessage?.id ?? null);
       setActiveConv(res.conversation);
       if (res.result.packetTrace) {
         setPacketTrace(res.result.packetTrace);
@@ -535,11 +548,23 @@ export function ChatWorkspacePage() {
       setInput(text);
       setAttachments(filesToSend);
       if ((err as { name?: string })?.name !== "AbortError") {
-        toast.error(
+        const msg =
           err instanceof Error
             ? err.message
-            : t("تعذر إرسال الرسالة.", "Could not send message."),
-        );
+            : t("تعذر إرسال الرسالة.", "Could not send message.");
+        if (/conversation not found/i.test(msg)) {
+          toast.error(
+            t(
+              "انتهت الجلسة السابقة لهذه المحادثة. تم فتح محادثة جديدة — أعد إرسال رسالتك.",
+              "This conversation session expired. Started a fresh chat — send your message again.",
+            ),
+            { id: "conv-not-found" },
+          );
+          setActiveConv(null);
+          navigate("/chat", { replace: true });
+          return;
+        }
+        toast.error(msg, { id: "chat-send-error" });
       }
       if (attemptedConversation && attemptedConversation.id !== "draft") {
         try {
@@ -662,10 +687,32 @@ export function ChatWorkspacePage() {
   async function handleFileSelect(files: FileList | null) {
     if (!files || files.length === 0) return;
     const loaded: PendingAttachment[] = [];
-    for (const file of Array.from(files).slice(0, 3 - attachments.length)) {
-      if (file.size > 64 * 1024) {
+    for (const file of Array.from(files).slice(0, 4 - attachments.length)) {
+      const isImage = file.type.startsWith("image/");
+      if (isImage) {
+        if (file.size > 1.8 * 1024 * 1024) {
+          toast.error(
+            `${file.name}: ${t("الحد الأقصى للصور 1.8 ميجابايت.", "Max image size is 1.8 MB.")}`,
+          );
+          continue;
+        }
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result ?? ""));
+          reader.onerror = () => reject(new Error("Could not read image"));
+          reader.readAsDataURL(file);
+        });
+        loaded.push({
+          name: file.name || `screenshot-${Date.now().toString(36).slice(-4)}.png`,
+          mimeType: file.type || "image/png",
+          content: dataUrl,
+        });
+        continue;
+      }
+
+      if (file.size > 128 * 1024) {
         toast.error(
-          `${file.name}: ${t("الحد الأقصى 64 كيلوبايت.", "Max file size is 64 KB.")}`,
+          `${file.name}: ${t("الحد الأقصى للملفات النصية 128 كيلوبايت.", "Max text file size is 128 KB.")}`,
         );
         continue;
       }
@@ -677,8 +724,12 @@ export function ChatWorkspacePage() {
       });
     }
     if (loaded.length > 0) {
-      setAttachments((prev) => [...prev, ...loaded].slice(0, 3));
-      toast.success(t("تم إرفاق الملف للمحادثة.", "File attached to message."));
+      setAttachments((prev) => [...prev, ...loaded].slice(0, 4));
+      toast.success(
+        loaded.some((f) => f.mimeType.startsWith("image/"))
+          ? t("تم إرفاق الصورة للتحليل الذكي.", "Image attached for AI inspection.")
+          : t("تم إرفاق الملف للمحادثة.", "File attached to message."),
+      );
     }
   }
 
@@ -705,10 +756,15 @@ export function ChatWorkspacePage() {
     profile?.preferences.showThinkingByDefault ?? false;
 
   return (
-    <div className="flex h-[100dvh] w-full overflow-hidden bg-background">
-      {/* Desktop Collapsible Sidebar */}
+    <div className="glass-canvas-bg flex h-[100dvh] w-full overflow-hidden">
+      {/* Desktop Floating Frosted-Glass Sidebar */}
       {sidebarOpen && (
-        <aside className="hidden w-[272px] shrink-0 border-e border-border/60 lg:block">
+        <motion.aside
+          initial={{ opacity: 0, x: lang === "ar" ? 16 : -16 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+          className="hidden w-[292px] shrink-0 p-2.5 pe-0 lg:block"
+        >
           <ChatSidebar
             nextOffset={nextOffset}
             onLoadMore={() => void loadConversations(search, nextOffset ?? 0)}
@@ -728,13 +784,18 @@ export function ChatWorkspacePage() {
               setPaletteOpen(true);
             }}
           />
-        </aside>
+        </motion.aside>
       )}
 
-      {/* Mobile Slide-Over Sidebar */}
+      {/* Mobile Floating Slide-Over Glass Sidebar */}
       {mobileSidebarOpen && (
-        <div className="fixed inset-0 z-50 flex lg:hidden">
-          <div className="w-[285px] max-w-[85vw] border-e bg-card shadow-2xl">
+        <div className="fixed inset-0 z-50 flex p-2.5 lg:hidden">
+          <motion.div
+            initial={{ opacity: 0, x: lang === "ar" ? 24 : -24 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+            className="w-[292px] max-w-[85vw]"
+          >
             <ChatSidebar
               nextOffset={nextOffset}
               onLoadMore={() => void loadConversations(search, nextOffset ?? 0)}
@@ -755,18 +816,19 @@ export function ChatWorkspacePage() {
               }}
               onCloseMobile={() => setMobileSidebarOpen(false)}
             />
-          </div>
+          </motion.div>
           <div
-            className="flex-1 bg-black/60 backdrop-blur-xs"
+            className="flex-1 bg-black/40 backdrop-blur-sm"
             onClick={() => setMobileSidebarOpen(false)}
           />
         </div>
       )}
 
-      {/* Center Column + Optional Slide-Out Artifact Drawer */}
+      {/* Center Column + Optional Floating Glass Artifact Drawer */}
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* Ultra-Clean Minimal Workspace Header */}
-        <header className="flex h-13 shrink-0 items-center justify-between gap-2 border-b border-border/50 bg-background/80 px-3 py-2 backdrop-blur-xl">
+        {/* Floating Frosted-Glass Workspace Header */}
+        <header className="px-3 pt-2.5 sm:px-4">
+          <div className="glass-panel flex h-12 shrink-0 items-center justify-between gap-2 rounded-2xl px-3">
           <div className="flex min-w-0 items-center gap-1.5">
             <Button
               size="icon"
@@ -861,18 +923,15 @@ export function ChatWorkspacePage() {
               )}
             </Button>
           </div>
+          </div>
         </header>
 
-        {/* Main Split Area */}
-        <div className="flex min-h-0 flex-1 overflow-hidden">
-          <div className="relative flex min-w-0 flex-1 flex-col">
+        {/* Main Split Area inside Floating Frosted Glass Stage */}
+        <div className="flex min-h-0 flex-1 gap-2.5 overflow-hidden p-2.5 sm:p-3">
+          <div className="glass-stage relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-[26px]">
             {messages.length === 0 ? (
-              /* Calm, Centered Claude/ChatGPT-Style Empty Stage (Zero Bulky Cards!) */
+              /* Calm, Centered Workspace Empty Stage */
               <div className="relative flex flex-1 flex-col items-center justify-center overflow-y-auto px-4 py-10 sm:px-8">
-                <div
-                  className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_60%_45%_at_50%_30%,hsl(var(--primary)/0.11),transparent_70%)]"
-                  aria-hidden
-                />
                 <motion.div
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -928,9 +987,9 @@ export function ChatWorkspacePage() {
                             pill.mode,
                           );
                         }}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-card/60 px-3.5 py-1.5 text-xs font-medium text-muted-foreground transition-all hover:border-primary/50 hover:bg-primary/5 hover:text-foreground"
+                        className="glass-pill inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/45 hover:text-foreground"
                       >
-                        <pill.icon className="h-3.5 w-3.5 text-cyan" />
+                        <pill.icon className="h-3.5 w-3.5 text-primary" />
                         <span>{t(pill.ar, pill.en)}</span>
                       </button>
                     ))}
@@ -951,12 +1010,17 @@ export function ChatWorkspacePage() {
                     {messages.map((msg, idx) => {
                       const isLatestAssistant =
                         msg.role === "assistant" && idx === messages.length - 1;
+                      const isStreamingThis =
+                        isLatestAssistant && streamingMsgId === msg.id;
                       return (
                         <motion.div
                           key={msg.id}
-                          initial={{ opacity: 0, y: 6 }}
+                          initial={{ opacity: 0, y: 10 }}
                           animate={{ opacity: 1, y: 0 }}
-                          transition={{ duration: 0.18 }}
+                          transition={{
+                            duration: 0.24,
+                            ease: [0.22, 1, 0.36, 1],
+                          }}
                           className={`flex gap-3 sm:gap-4 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                         >
                           {msg.role === "assistant" && (
@@ -966,7 +1030,7 @@ export function ChatWorkspacePage() {
                           <div
                             className={`min-w-0 ${
                               msg.role === "user"
-                                ? "max-w-[88%] sm:max-w-[76%] rounded-3xl rounded-se-md bg-primary px-4 py-3 text-[15px] text-primary-foreground shadow-sm"
+                                ? "glass-user-bubble max-w-[88%] rounded-3xl rounded-se-lg px-4 py-3 text-[15px] sm:max-w-[76%]"
                                 : "flex-1 space-y-3"
                             }`}
                           >
@@ -987,8 +1051,8 @@ export function ChatWorkspacePage() {
                                     </div>
                                   )}
                                 <p
-                                  dir="auto"
-                                  className="whitespace-pre-wrap break-words leading-relaxed"
+                                  dir={detectTextDirection(msg.content)}
+                                  className="whitespace-pre-wrap break-words text-start leading-relaxed"
                                 >
                                   {msg.content}
                                 </p>
@@ -1002,43 +1066,69 @@ export function ChatWorkspacePage() {
                                   defaultOpen={showThinkingDefault}
                                 />
 
-                                {/* Unboxed Full-Flow Prose */}
+                                {/* Unboxed Full-Flow Prose with Live Streaming Reveal */}
                                 <div className="space-y-3">
-                                  <ChatMarkdown content={msg.content} />
+                                  <StreamingChatMarkdown
+                                    content={msg.content}
+                                    streaming={isStreamingThis}
+                                    onProgress={() => {
+                                      if (scrollRef.current) {
+                                        scrollRef.current.scrollTop =
+                                          scrollRef.current.scrollHeight;
+                                      }
+                                    }}
+                                    onComplete={() =>
+                                      setStreamingMsgId((cur) =>
+                                        cur === msg.id ? null : cur,
+                                      )
+                                    }
+                                  />
 
-                                  {msg.cliOutput && (
+                                  {!isStreamingThis && msg.cliOutput && (
                                     <div
                                       dir="ltr"
-                                      className="mt-3 overflow-hidden rounded-xl border border-slate-800 bg-slate-950"
+                                      className="glass-code mt-3 overflow-hidden rounded-2xl"
                                     >
-                                      <div className="flex items-center gap-1.5 border-b border-slate-800 bg-slate-900 px-3.5 py-2 font-mono text-xs text-cyan">
+                                      <div className="flex items-center gap-1.5 border-b border-white/10 bg-white/[0.04] px-4 py-2 font-mono text-xs text-primary">
                                         <Terminal className="h-3.5 w-3.5" />
                                         <span>
                                           {msg.cliOutput.deviceId}#{" "}
                                           {msg.cliOutput.command}
                                         </span>
                                       </div>
-                                      <pre className="max-h-60 overflow-auto p-3.5 font-mono text-xs text-slate-200">
+                                      <pre className="max-h-60 overflow-auto p-4 font-mono text-xs text-zinc-200">
                                         {msg.cliOutput.output}
                                       </pre>
                                     </div>
                                   )}
 
-                                  {msg.hasTopologyUpdate &&
+                                  {!isStreamingThis &&
+                                    msg.hasTopologyUpdate &&
                                     msg.topologySummary && (
-                                      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary/30 bg-gradient-to-r from-primary/10 via-card/50 to-cyan/10 p-3.5">
+                                      <motion.div
+                                        initial={{ opacity: 0, y: 8 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{
+                                          duration: 0.24,
+                                          ease: [0.22, 1, 0.36, 1],
+                                        }}
+                                        className="glass-surface mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl p-4"
+                                      >
                                         <div className="flex items-center gap-3">
-                                          <span className="grid h-10 w-10 place-items-center rounded-xl bg-primary/15 text-primary">
+                                          <span className="grid h-10 w-10 place-items-center rounded-xl border bg-muted/60 text-primary">
                                             <Network className="h-5 w-5" />
                                           </span>
                                           <div className="text-xs">
-                                            <p className="font-bold text-foreground text-sm">
+                                            <p className="text-sm font-semibold text-foreground">
                                               {t(
                                                 "مخطط الشبكة التفاعلي جاهز",
                                                 "Interactive Network Blueprint Ready",
                                               )}
                                             </p>
-                                            <p className="font-mono text-xs text-muted-foreground">
+                                            <p
+                                              dir="ltr"
+                                              className="font-mono text-xs tabular-nums text-muted-foreground"
+                                            >
                                               {msg.topologySummary.devices} dev
                                               · {msg.topologySummary.links}{" "}
                                               links ·{" "}
@@ -1061,7 +1151,7 @@ export function ChatWorkspacePage() {
                                               setArtifactOpen(true)
                                             }
                                           >
-                                            <PanelRight className="h-3.5 w-3.5 text-cyan" />
+                                            <PanelRight className="h-3.5 w-3.5 text-primary" />
                                             {t("عرض المخطط", "Open Canvas")}
                                           </Button>
                                           <Button
@@ -1079,7 +1169,34 @@ export function ChatWorkspacePage() {
                                             Packet Tracer
                                           </Button>
                                         </div>
-                                      </div>
+                                      </motion.div>
+                                    )}
+
+                                  {!isStreamingThis &&
+                                    msg.exportCards &&
+                                    msg.exportCards.length > 0 &&
+                                    workspace && (
+                                      <motion.div
+                                        initial={{ opacity: 0, y: 8 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{
+                                          duration: 0.24,
+                                          delay: 0.05,
+                                          ease: [0.22, 1, 0.36, 1],
+                                        }}
+                                      >
+                                        <ChatExportCards
+                                          cards={msg.exportCards}
+                                          workspace={workspace}
+                                          preferArabic={
+                                            detectTextDirection(msg.content) ===
+                                            "rtl"
+                                          }
+                                          onOpenExportCenter={() =>
+                                            setExportModalOpen(true)
+                                          }
+                                        />
+                                      </motion.div>
                                     )}
 
                                   <div className="flex items-center gap-1 pt-1 text-xs text-muted-foreground">
@@ -1112,11 +1229,12 @@ export function ChatWorkspacePage() {
                                 </div>
 
                                 {isLatestAssistant &&
+                                  !isStreamingThis &&
                                   msg.clarifyingQuestions &&
                                   msg.clarifyingQuestions.length > 0 && (
-                                    <div className="space-y-2.5 rounded-2xl border border-cyan/30 bg-cyan/5 p-4">
+                                    <div className="glass-surface space-y-2.5 rounded-2xl p-4">
                                       <p className="flex items-center gap-1.5 text-xs font-bold text-foreground">
-                                        <HelpCircle className="h-4 w-4 text-cyan" />
+                                        <HelpCircle className="h-4 w-4 text-primary" />
                                         {t(
                                           "أسئلة سريعة لتخصيص الحل:",
                                           "Quick questions to tailor your solution:",
@@ -1153,6 +1271,7 @@ export function ChatWorkspacePage() {
                                   )}
 
                                 {isLatestAssistant &&
+                                  !isStreamingThis &&
                                   msg.followUpSuggestions &&
                                   msg.followUpSuggestions.length > 0 && (
                                     <div className="flex flex-wrap gap-1.5 pt-1">
@@ -1165,9 +1284,9 @@ export function ChatWorkspacePage() {
                                             onClick={() =>
                                               void sendMessage(sug)
                                             }
-                                            className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-card/60 px-3 py-1.5 text-xs text-muted-foreground transition-all hover:border-primary/50 hover:bg-primary/5 hover:text-foreground"
+                                            className="glass-pill inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/45 hover:text-foreground"
                                           >
-                                            <Sparkles className="h-3 w-3 shrink-0 text-cyan" />
+                                            <Sparkles className="h-3 w-3 shrink-0 text-primary" />
                                             <span dir="auto">{sug}</span>
                                           </button>
                                         ),
@@ -1264,8 +1383,8 @@ export function ChatWorkspacePage() {
                     )}
                   </div>
                 )}
-                {/* Bottom Docked Composer */}
-                <div className="shrink-0 bg-gradient-to-t from-background via-background/95 to-transparent px-3 pb-4 pt-2 sm:px-6">
+                {/* Bottom Docked Floating Glass Composer */}
+                <div className="shrink-0 px-3 pb-4 pt-2 sm:px-6">
                   <ChatComposer
                     centered={false}
                     artifactOpen={artifactOpen}
@@ -1290,9 +1409,15 @@ export function ChatWorkspacePage() {
             )}
           </div>
 
-          {/* Slide-Out Live Interactive Network Drawer */}
+          {/* Slide-Out Floating Frosted-Glass Artifact Drawer */}
           {artifactOpen && workspace && !artifactFullscreen && largeScreen && (
-            <section className="hidden w-[48%] min-w-[440px] max-w-[680px] shrink-0 xl:block">
+            <motion.section
+              initial={{ opacity: 0, x: lang === "ar" ? -20 : 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+              className="hidden w-[48%] min-w-[440px] max-w-[680px] shrink-0 p-2.5 ps-0 xl:block"
+            >
+              <div className="glass-panel h-full overflow-hidden rounded-2xl">
               <Suspense
                 fallback={
                   <div className="grid h-full place-items-center text-xs text-muted-foreground">
@@ -1316,7 +1441,8 @@ export function ChatWorkspacePage() {
                   }}
                 />
               </Suspense>
-            </section>
+              </div>
+            </motion.section>
           )}
         </div>
       </div>

@@ -22,13 +22,13 @@ export function UnifiedThinkingPill({
   if (totalCount === 0 && toolList.length === 0) return null;
 
   return (
-    <div className="mb-2">
+    <div className="mb-2.5">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-muted/40 px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-border hover:bg-muted/70 hover:text-foreground"
+        className="glass-pill inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-medium text-muted-foreground transition-all hover:border-primary/40 hover:text-foreground"
       >
-        <Brain className="h-3.5 w-3.5 text-cyan" />
+        <Brain className="h-3.5 w-3.5 text-primary" />
         <span>
           {toolList.length > 0
             ? t(
@@ -48,10 +48,10 @@ export function UnifiedThinkingPill({
       </button>
 
       {open && (
-        <div className="mt-2 space-y-2 rounded-2xl border border-border/60 bg-muted/20 p-3.5">
+        <div className="glass-surface mt-2 space-y-2 rounded-2xl p-3.5">
           {stepList.map((step, idx) => (
             <div key={idx} className="flex items-start gap-2.5 text-xs">
-              <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-emerald-500/15 text-emerald-400">
+              <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
                 <Check className="h-2.5 w-2.5" />
               </span>
               <div className="min-w-0 flex-1">
@@ -71,9 +71,9 @@ export function UnifiedThinkingPill({
                 <span
                   key={ti}
                   dir="ltr"
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-cyan/25 bg-background/70 px-2.5 py-1 font-mono text-[10px] text-muted-foreground"
+                  className="glass-pill inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 font-mono text-[10px] text-muted-foreground"
                 >
-                  <Wrench className="h-3 w-3 text-cyan" />
+                  <Wrench className="h-3 w-3 text-primary" />
                   {tc.summary}
                 </span>
               ))}

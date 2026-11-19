@@ -19,6 +19,25 @@ export interface ChatToolExecution {
   mutated: boolean;
 }
 
+export type ExportCardKind =
+  | "pt-guide"
+  | "cisco-cfg"
+  | "cml-yaml"
+  | "gns3-project"
+  | "cabling-csv"
+  | "pdf-report"
+  | "pt-pack";
+
+export interface ChatExportCard {
+  id: ExportCardKind;
+  format: string;
+  titleAr: string;
+  titleEn: string;
+  descAr: string;
+  descEn: string;
+  recommended?: boolean;
+}
+
 export interface ChatMessageItem {
   id: string;
   role: "user" | "assistant";
@@ -31,6 +50,7 @@ export interface ChatMessageItem {
   clarifyingQuestions?: ClarifyingQuestion[];
   attachments?: { name: string; size: number }[];
   cliOutput?: { deviceId: string; command: string; output: string };
+  exportCards?: ChatExportCard[];
   hasTopologyUpdate?: boolean;
   topologySummary?: {
     devices: number;

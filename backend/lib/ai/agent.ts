@@ -19,11 +19,16 @@ import { GoogleGenAI } from "@google/genai";
 import type {
   AgentWorkMode,
   ChatAttachment,
+  ChatExportCard,
   ClarifyingQuestion,
   StoredProfile,
   ThinkingStep,
 } from "../../src/storage/types";
-import { executeAgentTool, type MutableContext } from "./agent-tools";
+import {
+  executeAgentTool,
+  EXPORT_CARD_CATALOG,
+  type MutableContext,
+} from "./agent-tools";
 import { localAttachmentContext } from "./local-attachments";
 import { DEFAULT_GEMINI_MODEL, FAST_GEMINI_MODEL } from "./providers";
 
@@ -58,6 +63,7 @@ export interface AgentChatRequest {
 
 export interface AgentChatResponse {
   reply: string;
+  detectedLang?: "ar" | "en";
   executionMode?: "local" | "external";
   engineLabel: string;
   mode: AgentWorkMode;
@@ -65,6 +71,7 @@ export interface AgentChatResponse {
   toolCalls: AgentToolExecution[];
   followUpSuggestions: string[];
   clarifyingQuestions?: ClarifyingQuestion[];
+  exportCards?: ChatExportCard[];
   mutated: boolean;
   nextState?: {
     topology: BuiltTopology;
@@ -274,14 +281,32 @@ const AGENT_TOOLS = [
       required: ["device", "command"],
     },
   },
+  {
+    type: "function" as const,
+    name: "prepare_file_export",
+    description:
+      "Attach direct, 1-click downloadable engineering files right inside the chat message (Cisco Packet Tracer interactive build guide .html, Cisco IOS startup .cfg, cabling matrix .csv, Cisco CML .yaml, GNS3 .gns3, Executive .pdf). Call this whenever the user asks to download, export, or get a .pkt / .ptk / Packet Tracer / config / CML / GNS3 / PDF file.",
+    parameters: {
+      type: "object",
+      properties: {
+        target: {
+          type: "string",
+          description:
+            "Requested format or platform, e.g. 'packet-tracer', 'cfg', 'cml', 'gns3', 'pdf', 'csv'.",
+        },
+      },
+      required: ["target"],
+    },
+  },
 ];
 
 function buildSystemInstruction(
   mode: AgentWorkMode,
+  responseLang: "ar" | "en",
   profile?: StoredProfile,
 ): string {
   const modeGuidance: Record<AgentWorkMode, string> = {
-    auto: "Mode: AUTO AGENT — Handle any general, technical, or network engineering conversation smoothly. Call tools whenever the user wants to build, modify, audit, harden, trace, Red-Team, price, or run CLI on a network.",
+    auto: "Mode: AUTO AGENT — Handle any general, technical, or network engineering conversation smoothly. Call tools whenever the user wants to build, modify, audit, harden, trace, Red-Team, price, run CLI, or export files for a network.",
     architect:
       "Mode: DEEP ARCHITECT — Think like a Principal CCIE Network Architect. Provide deep trade-off analysis, high-availability design, VLAN/IPv4 rigor, and when a design brief is broad or missing scale/redundancy/budget details, include 1–2 concise clarifyingQuestions in <nettopo_meta> so the user can refine in one click.",
     security:
@@ -313,27 +338,43 @@ function buildSystemInstruction(
     );
   }
 
-  return `You are **Topova AI** — a world-class autonomous AI assistant and Principal Network Engineering Agent built directly into the Topova AI Platform.
+  const languageDirective =
+    responseLang === "ar"
+      ? `RESPONSE LANGUAGE & RTL FORMATTING (MANDATORY FOR THIS TURN):
+- The user is communicating in ARABIC. You MUST write your entire response, headings, explanations, and follow-up suggestions in fluent, natural, professional Arabic.
+- Keep technical terms, Cisco IOS commands, IP addresses, VLAN IDs, and file extensions clean and readable: put multi-line configs inside fenced \`\`\`cli code blocks and use inline backticks for short identifiers (\`OSPF\`, \`VLAN 10\`, \`.cfg\`).
+- Start every Arabic bullet point with an Arabic word so RTL alignment stays crisp and never scrambles.`
+      : `RESPONSE LANGUAGE & LTR FORMATTING (MANDATORY FOR THIS TURN):
+- The user is communicating in ENGLISH. You MUST write your entire response, headings, explanations, and follow-up suggestions in crisp, natural, professional English.
+- Structure answers cleanly with scannable headings, concise bullet points, markdown tables when comparing options, and fenced code blocks for CLI/configs.`;
+
+  return `You are **Topova AI** — a world-class autonomous AI assistant and Principal Network Engineering Agent (CCIE-level) built directly into the Topova AI Platform.
 
 IDENTITY & CONFIDENTIALITY RULES (CRITICAL):
 - You are exclusively **Topova AI**.
 - NEVER mention Google, Gemini, OpenAI, Anthropic, Claude, Groq, or any third-party AI provider, external API, or underlying model ID. If asked what model or API you are, answer naturally that you are Topova AI's built-in intelligent engineering core.
 
-CAPABILITIES:
-- You can converse naturally and brilliantly about ANY topic: general questions, computer networking (CCNA/CCNP/CCIE), cybersecurity, software engineering, graduation project documentation, troubleshooting, or career advice.
-- You also possess 8 live deterministic network engineering tools (topology generation, incremental editing, 0-100 security audit, auto-remediation, packet tracing, Red-Team attack simulation, BOM/PoE estimation, and live Cisco IOS CLI).
-- Use tools whenever the user asks to design, build, change, audit, fix, simulate, price, or inspect a network. Do NOT call topology tools for purely conceptual questions or casual greetings.
+${languageDirective}
+- If the user switches language in a later turn (Arabic <-> English), immediately switch your response language to match them seamlessly, just like a native bilingual engineer.
+
+CAPABILITIES & DELIVERABLE GUIDANCE:
+- You can converse naturally and brilliantly about ANY topic: general questions, computer networking (CCNA/CCNP/CCIE), subnetting math, cybersecurity, software engineering, graduation project documentation, troubleshooting, or career advice.
+- You possess 9 live deterministic network engineering tools: topology generation, incremental editing, 0-100 security audit, auto-remediation, packet tracing, Red-Team attack simulation, BOM/PoE estimation, live Cisco IOS CLI, and direct file export preparation (\`prepare_file_export\`).
+- Use tools whenever the user asks to design, build, change, audit, fix, simulate, price, inspect, or export files for a network. Do NOT call topology tools for purely conceptual questions or casual greetings.
+- FILE EXPORTS & CISCO PACKET TRACER (.pkt / .ptk):
+  * Whenever the user asks for a Packet Tracer file (.pkt / .ptk), Cisco configs (.cfg), CML (.yaml), GNS3 (.gns3), cabling CSV, or PDF report, ALWAYS call \`prepare_file_export\` so direct 1-click download cards appear right below your message!
+  * Be honest and crystal-clear about \`.pkt\`: Cisco's binary \`.pkt\` format is proprietary/encrypted by Cisco, so Topova gives them direct, immediately usable Cisco Packet Tracer files right in the chat: the Interactive Packet Tracer Build Guide (\`.html\`), Cisco IOS Startup Config (\`.cfg\`), Port-to-Port Cabling Matrix (\`.csv\`), and direct topology imports for CML (\`.yaml\`) and GNS3 (\`.gns3\`).
+  * NEVER leave the user guessing how to use a file. Always give clear, numbered, step-by-step instructions on how to open and load the file (e.g., in Cisco Packet Tracer: Device -> Config -> Load for \`.cfg\`, or paste into the CLI tab).
 - Changes to an existing network are proposed candidate changes, not applied changes. Describe them as proposals pending user review. New designs appear in the canvas; export readiness is checked separately before export.
-- Always reply in the SAME language the user writes in (fluent Arabic for Arabic prompts, crisp English for English prompts).
 
 ${modeGuidance[mode]}
 ${personalizationParts.length > 0 ? `\nENGINEER PROFILE CONTEXT:\n${personalizationParts.join("\n")}\n` : ""}
 INTERACTIVE METADATA BLOCK (ALWAYS APPEND AT THE VERY END OF YOUR RESPONSE):
 After your final markdown answer, append a single hidden JSON block wrapped in <nettopo_meta>...</nettopo_meta> containing:
-1. "followUps": an array of 3 concise, high-value follow-up questions/prompts in the SAME language as the user that the user can click next.
+1. "followUps": an array of 3 concise, high-value follow-up questions/prompts in ${responseLang === "ar" ? "ARABIC" : "ENGLISH"} that the user can click next.
 2. "clarifyingQuestions": OPTIONAL array (0 to 2 items) ONLY when the user's request is broad/open-ended and asking quick multiple-choice questions would help refine their network or task. Each item: {"question":"...","options":["...","...","..."]}.
 Example:
-<nettopo_meta>{"followUps":["افحص أمان الشبكة وأصلح الثغرات","احسب ميزانية طاقة PoE والتكلفة","صدّر ملفات سيسكو باكت تريسر"],"clarifyingQuestions":[]}</nettopo_meta>`;
+<nettopo_meta>{"followUps":["افحص أمان الشبكة وأصلح الثغرات","احسب ميزانية طاقة PoE والتكلفة","جهّز ملفات Cisco Packet Tracer للتحميل"],"clarifyingQuestions":[]}</nettopo_meta>`;
 }
 
 export function createDefaultAgentState(): AgentNetworkState {
@@ -377,8 +418,43 @@ function buildLiveContextSnapshot(state?: AgentNetworkState): string {
   ].join("\n");
 }
 
-function isArabicText(text: string): boolean {
-  return /[\u0600-\u06FF]/.test(text);
+/**
+ * Dynamic ChatGPT-style bilingual language detector.
+ * Prioritizes the user's current message so mid-conversation language switches
+ * (Arabic <-> English) happen instantaneously, and falls back to conversation
+ * history for language-neutral inputs (like CLI commands or IPs).
+ */
+export function detectMessageLanguage(
+  message: string,
+  history?: AgentChatMessage[],
+  fallbackLang?: "ar" | "en" | "auto",
+): "ar" | "en" {
+  const arCount = message.match(/[\u0600-\u06FF]/g)?.length ?? 0;
+  // Strip common technical/CLI tokens (Cisco, OSPF, VLAN, .pkt, show ip route, IPs) before counting English prose letters
+  const stripped = message
+    .replace(
+      /\b(cisco|packet|tracer|ospf|eigrp|bgp|rip|vlan|vlans|acl|acls|poe|nvr|cctv|gns3|cml|ios|cli|tcp|udp|icmp|ipv4|ipv6|ip|pc\d*|r\d+|sw\d+|fw\d+|srv\d+|cam\d+|ap\d+|show|ping|traceroute|route|brief|interface|interfaces|running-config|startup-config|access-lists|version|neighbors|status)\b/gi,
+      "",
+    )
+    .replace(/\.[a-z0-9]{2,5}\b/gi, "");
+  const enCount = stripped.match(/[a-zA-Z]/g)?.length ?? 0;
+
+  if (arCount >= 2) return "ar";
+  if (enCount >= 3 && arCount === 0) return "en";
+
+  // Neutral / command-only input: check most recent user message in history
+  if (history && history.length > 0) {
+    for (let i = history.length - 1; i >= 0; i--) {
+      if (history[i].role === "user") {
+        const hAr = history[i].content.match(/[\u0600-\u06FF]/g)?.length ?? 0;
+        if (hAr >= 2) return "ar";
+        const hEn = history[i].content.match(/[a-zA-Z]/g)?.length ?? 0;
+        if (hEn >= 3) return "en";
+      }
+    }
+  }
+
+  return fallbackLang === "ar" ? "ar" : "en";
 }
 
 function parseMetaBlock(raw: string): {
@@ -486,9 +562,10 @@ function runLocalFallbackAgent(
   message: string,
   ctx: MutableContext,
   mode: AgentWorkMode,
+  detectedLang: "ar" | "en",
 ): AgentChatResponse {
   const lower = message.toLowerCase().trim();
-  const ar = isArabicText(message);
+  const ar = detectedLang === "ar";
 
   ctx.thinkingSteps.unshift({
     title: ar
@@ -545,17 +622,78 @@ function runLocalFallbackAgent(
       ctx,
       ar,
     );
+    const defaultCards: ChatExportCard[] = [
+      EXPORT_CARD_CATALOG["pt-guide"],
+      EXPORT_CARD_CATALOG["cisco-cfg"],
+    ];
     return {
       reply: ar
-        ? `تم إعداد تصميم من ${result.deviceCount} أجهزة و${result.linkCount} وصلات. راجع المخطط وفحص التصدير قبل استخدام الإعدادات.`
-        : `Prepared a design with ${result.deviceCount} devices and ${result.linkCount} links. Review the canvas and export checks before using the configurations.`,
+        ? `تم إعداد تصميم الشبكة بنجاح (**${result.deviceCount}** جهاز و **${result.linkCount}** وصلة) مع تقييم أمان **${result.securityScore}/100**.\n\n### الخطوات التالية:\n1. يمكنك معاينة المخطط التفاعلي وتعديل الأجهزة من لوحة **المخطط** بجانب المحادثة.\n2. لتحميل ملفات **Cisco Packet Tracer** مباشرة، استخدم بطاقات التحميل المرفقة أدناه (دليل البناء التفاعلي أو ملف إعدادات \`.cfg\`).\n3. راجع فحص جاهزية التصدير قبل تطبيق الإعدادات في المختبر.`
+        : `Network design ready (**${result.deviceCount}** devices, **${result.linkCount}** links, Security Score **${result.securityScore}/100**).\n\n### Next Steps:\n1. Inspect and interact with the live topology in the **Canvas** panel beside this chat.\n2. Download your **Cisco Packet Tracer** files directly from the deliverable cards below (Interactive Build Guide or Cisco IOS \`.cfg\`).\n3. Review export readiness checks before deploying into your lab.`,
+      detectedLang,
       engineLabel: "Topova Intelligence",
       mode,
       thinkingSteps: ctx.thinkingSteps,
       toolCalls: ctx.toolCalls,
       followUpSuggestions: buildSmartFollowUps(ar, ctx),
+      exportCards: defaultCards,
       mutated: true,
       nextState: { topology: ctx.topology, plan: ctx.plan, acls: ctx.acls },
+    };
+  }
+
+  // Handle direct file export / .pkt / .ptk / Packet Tracer / CML / GNS3 / PDF requests
+  if (
+    /(\.pkt|\.ptk|packet\s*tracer|باكت\s*تريسر|سيسكو.*ملف|ملف.*سيسكو|تصدير|تحميل.*ملف|download|export|\.cfg|\.yaml|\.gns3|cml|gns3|pdf)/i.test(
+      message,
+    )
+  ) {
+    if (!ctx.topology.devices.length) {
+      return {
+        reply: ar
+          ? "لتحميل ملفات **Cisco Packet Tracer** أو إعدادات `.cfg`، نحتاج أولاً إلى تصميم شبكة في هذه المحادثة.\n\nاكتب وصف الشبكة التي تريدها (مثلاً: *صمم شبكة شركة بـ 2 راوتر وجدار حماية و2 سويتش و6 أجهزة كمبيوتر*) وسأقوم ببنائها وتجهيز ملفات التحميل المباشرة لك فوراً."
+          : "To generate **Cisco Packet Tracer** deliverables or `.cfg` files, let's design a network topology in this chat first.\n\nDescribe the network you want (for example: *Design an office network with 2 routers, 1 firewall, 2 switches, and 6 PCs*) and I will build it and attach direct downloadable files right here.",
+        detectedLang,
+        engineLabel: "Topova Intelligence",
+        mode,
+        thinkingSteps: ctx.thinkingSteps,
+        toolCalls: [],
+        followUpSuggestions: ar
+          ? [
+              "صمم شبكة شركة بـ 2 راوتر وجدار حماية و2 سويتش و6 أجهزة كمبيوتر",
+              "صمم شبكة كاميرات مراقبة مع سويتش و NVR و 4 كاميرات",
+            ]
+          : [
+              "Design an office network with 2 routers, 1 firewall, 2 switches & 6 PCs",
+              "Design a CCTV lab with 1 router, 1 switch, 1 NVR & 4 cameras",
+            ],
+        mutated: false,
+      };
+    }
+
+    executeAgentTool("prepare_file_export", { target: message }, ctx, ar);
+    return {
+      reply: ar
+        ? `جهّزت لك ملفات الشبكة المباشرة للتحميل أدناه بدون الحاجة لفتح ملف مضغوط غير واضح.\n\n> **ملاحظة هندسية حول ملف \`.pkt\`:** صيغة \`.pkt\` الثنائية مغلقة ومشفّرة حصرياً بواسطة شركة Cisco؛ لذلك نوفر لك الملفات الرسمية المباشرة التي يقبلها **Cisco Packet Tracer 8.x** فوراً:\n\n1. **دليل البناء التفاعلي (\`.html\`):** افتحه في المتصفح لمعرفة موديل كل جهاز في Packet Tracer وخريطة توصيل الكابلات مع زر نسخ أوامر كل جهاز.\n2. **ملف إعدادات Cisco IOS (\`.cfg\`):** في Packet Tracer اضغط على الجهاز ثم **Config ← Load** لتحميله مباشرة، أو انسخه في تبويب **CLI**.\n3. **ملفات المحاكاة المباشرة:** يمكنك أيضاً تحميل **Cisco CML (\`.yaml\`)** أو **GNS3 (\`.gns3\`)** إذا كنت تستخدم محاكيات متقدمة.`
+        : `Your direct engineering deliverables are ready for 1-click download below — no confusing archive required.\n\n> **Engineering note on \`.pkt\` files:** Cisco's native binary \`.pkt\` format is proprietary and encrypted by Cisco. Instead, Topova provides direct, ready-to-load files for **Cisco Packet Tracer 8.x**:\n\n1. **Interactive Build Guide (\`.html\`):** Open in any browser to see exact Packet Tracer hardware models, port-to-port wiring, and 1-click CLI copy per device.\n2. **Cisco IOS Startup Config (\`.cfg\`):** Inside Packet Tracer, open any router/switch → **Config → Load** (or paste into the **CLI** tab).\n3. **Native Lab Imports:** Direct **Cisco CML (\`.yaml\`)** and **GNS3 (\`.gns3\`)** files are also available when needed.`,
+      detectedLang,
+      engineLabel: "Topova Intelligence",
+      mode,
+      thinkingSteps: ctx.thinkingSteps,
+      toolCalls: ctx.toolCalls,
+      followUpSuggestions: ar
+        ? [
+            "افحص أمان الشبكة قبل التصدير",
+            "نفّذ أمر show ip interface brief على R1",
+            "احسب ميزانية الأجهزة وطاقة PoE",
+          ]
+        : [
+            "Run a security audit before deploying",
+            "Run 'show ip interface brief' on R1",
+            "Estimate hardware BOM & PoE power budget",
+          ],
+      exportCards: ctx.exportCards,
+      mutated: false,
     };
   }
   if (!ctx.topology.devices.length) {
@@ -811,12 +949,12 @@ export async function runNetworkAgentChat(
 ): Promise<AgentChatResponse> {
   const mode: AgentWorkMode =
     req.mode ?? req.profile?.preferences.defaultMode ?? "auto";
-  const ar =
-    req.lang === "ar"
-      ? true
-      : req.lang === "en"
-        ? false
-        : isArabicText(req.message);
+  const detectedLang = detectMessageLanguage(
+    req.message,
+    req.history,
+    req.lang,
+  );
+  const ar = detectedLang === "ar";
   const baseState = structuredClone(req.state ?? createDefaultAgentState());
 
   const ctx: MutableContext = {
@@ -832,11 +970,9 @@ export async function runNetworkAgentChat(
   const localResponse = () => {
     if (callerSignal?.aborted)
       throw new DOMException("Request cancelled", "AbortError");
-    const attachments = localAttachmentContext(
-      req.attachments ?? [],
-      req.lang === "ar" || isArabicText(req.message),
-    );
-    const response = runLocalFallbackAgent(req.message, ctx, mode);
+    const attachments = localAttachmentContext(req.attachments ?? [], ar);
+    const response = runLocalFallbackAgent(req.message, ctx, mode, detectedLang);
+    response.detectedLang = detectedLang;
     response.executionMode = "local";
     if (
       response.mutated &&
@@ -877,24 +1013,69 @@ export async function runNetworkAgentChat(
     .map((m) => `${m.role === "user" ? "User" : "NetTopo AI"}: ${m.content}`)
     .join("\n");
 
-  const attachmentBlock = (req.attachments ?? [])
-    .slice(0, 3)
+  const textAttachments = (req.attachments ?? [])
+    .slice(0, 4)
+    .filter(
+      (att) =>
+        !att.mimeType?.startsWith("image/") &&
+        !att.content.startsWith("data:image/"),
+    );
+
+  const imageAttachments = (req.attachments ?? [])
+    .slice(0, 4)
+    .filter(
+      (att) =>
+        att.mimeType?.startsWith("image/") ||
+        att.content.startsWith("data:image/"),
+    )
+    .map((att) => {
+      const match = att.content.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+      if (match) {
+        return { name: att.name, mimeType: match[1], base64: match[2] };
+      }
+      return {
+        name: att.name,
+        mimeType: att.mimeType || "image/png",
+        base64: att.content,
+      };
+    });
+
+  const attachmentBlock = textAttachments
     .map(
       (att) =>
-        `--- ATTACHED FILE: ${att.name} ---\n${att.content.slice(0, 12_000)}\n--- END FILE ---`,
+        `--- ATTACHED / PASTED FILE: ${att.name} ---\n${att.content.slice(0, 24_000)}\n--- END FILE ---`,
     )
     .join("\n\n");
 
-  const initialInput = [
+  const initialInputText = [
     buildLiveContextSnapshot(req.state),
     attachmentBlock ? `\n${attachmentBlock}\n` : "",
+    imageAttachments.length
+      ? `\n[${imageAttachments.length} pasted/attached image(s) included below — inspect every device, IP, port, error message, or diagram thoroughly.]\n`
+      : "",
     recentHistory ? `\nRecent conversation:\n${recentHistory}\n` : "",
     `User message: ${req.message}`,
   ]
     .filter(Boolean)
     .join("\n");
 
-  const systemInstruction = buildSystemInstruction(mode, req.profile);
+  const initialInput: unknown =
+    imageAttachments.length > 0
+      ? [
+          { type: "text", text: initialInputText },
+          ...imageAttachments.map((img) => ({
+            type: "image",
+            data: img.base64,
+            mime_type: img.mimeType,
+          })),
+        ]
+      : initialInputText;
+
+  const systemInstruction = buildSystemInstruction(
+    mode,
+    detectedLang,
+    req.profile,
+  );
   const deadline = AbortSignal.timeout(40_000);
   const signal = callerSignal
     ? AbortSignal.any([deadline, callerSignal])
@@ -927,7 +1108,7 @@ export async function runNetworkAgentChat(
         ai.interactions.create(
           {
             model,
-            input: initialInput,
+            input: initialInput as never,
             system_instruction: systemInstruction,
             tools: AGENT_TOOLS as never,
           },
@@ -997,8 +1178,17 @@ export async function runNetworkAgentChat(
       const { cleanReply, followUps, clarifyingQuestions } =
         parseMetaBlock(rawOutput);
 
+      // If a brand-new topology was generated and no explicit export cards were prepared yet,
+      // attach the top 2 direct Packet Tracer deliverables for immediate 1-click access.
+      const finalExportCards =
+        attemptCtx.exportCards ??
+        (attemptCtx.mutated && attemptCtx.topology.devices.length > 0
+          ? [EXPORT_CARD_CATALOG["pt-guide"], EXPORT_CARD_CATALOG["cisco-cfg"]]
+          : undefined);
+
       return {
         executionMode: "external",
+        detectedLang,
         reply: cleanReply,
         engineLabel: "Topova Intelligence",
         mode,
@@ -1010,6 +1200,7 @@ export async function runNetworkAgentChat(
             : buildSmartFollowUps(ar, attemptCtx),
         clarifyingQuestions:
           clarifyingQuestions.length > 0 ? clarifyingQuestions : undefined,
+        exportCards: finalExportCards,
         mutated: attemptCtx.mutated,
         nextState: attemptCtx.mutated
           ? {
