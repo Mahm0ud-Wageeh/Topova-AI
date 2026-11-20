@@ -23,6 +23,7 @@
     "test:db": "vitest run tests/branch-revisions.integration.test.ts",
     "db:import-local": "tsx scripts/migrate-local-store.ts",
     "check": "npm run typecheck && npm run lint && npm test && npm run build && npm run test:production",
+    "deploy:cloudflare": "node scripts/run.mjs build frontend && npx --yes wrangler@4 deploy -c cloudflare/wrangler.jsonc",
     "test:production": "tsx scripts/smoke-production.ts && node scripts/smoke-serverless.mjs"
   },
   "devDependencies": {
