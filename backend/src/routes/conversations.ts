@@ -282,6 +282,9 @@ export function conversationsRouter(store: DataStore) {
   });
 
   router.post("/:id/messages", async (req, res, next) => {
+    let streaming = false;
+    let heartbeat: NodeJS.Timeout | undefined;
+    let sendEvent: (event: string, data: unknown) => void = () => undefined;
     try {
       const ownerId = req.principal!.ownerId;
       const existing = await store.getConversation(ownerId, req.params.id);
@@ -344,8 +347,35 @@ export function conversationsRouter(store: DataStore) {
         if (!res.writableEnded) controller.abort();
       });
 
+      // Server-Sent Events: live progress while tools run, then one `result`
+      // event carrying the exact JSON the non-streaming route returns.
+      const wantsStream =
+        req.query.stream === "1" ||
+        String(req.headers.accept ?? "").includes("text/event-stream");
+      if (wantsStream) {
+        streaming = true;
+        res.writeHead(200, {
+          "Content-Type": "text/event-stream; charset=utf-8",
+          "Cache-Control": "no-cache, no-transform",
+          Connection: "keep-alive",
+          "X-Accel-Buffering": "no",
+        });
+        sendEvent = (event, data) => {
+          if (res.writableEnded || res.destroyed) return;
+          res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+        };
+        sendEvent("open", { requestId: req.requestId });
+        heartbeat = setInterval(() => {
+          if (!res.writableEnded) res.write(": ping\n\n");
+        }, 8000);
+        heartbeat.unref?.();
+      }
+
       const agentResult = await runNetworkAgentChat(
         {
+          onProgress: wantsStream
+            ? (event) => sendEvent("progress", event)
+            : undefined,
           message: parsed.message,
           mode,
           lang: parsed.lang ?? "auto",
@@ -454,14 +484,39 @@ export function conversationsRouter(store: DataStore) {
 
       if (!updated)
         throw new HttpError(404, "NOT_FOUND", "Conversation no longer exists.");
-      res.json({
+      const payload = {
         conversation: updated,
         userMessage: userMsg,
         assistantMessage: assistantMsg,
         result: agentResult,
-      });
+      };
+      if (streaming) {
+        sendEvent("result", payload);
+        res.end();
+      } else {
+        res.json(payload);
+      }
     } catch (err) {
-      next(err);
+      if (streaming && res.headersSent) {
+        if (err instanceof HttpError) {
+          sendEvent("error", {
+            status: err.status,
+            code: err.code,
+            message: err.message,
+          });
+        } else {
+          sendEvent("error", {
+            status: 500,
+            code: "INTERNAL",
+            message: "The engineering core could not complete this request.",
+          });
+        }
+        res.end();
+      } else {
+        next(err);
+      }
+    } finally {
+      if (heartbeat) clearInterval(heartbeat);
     }
   });
 

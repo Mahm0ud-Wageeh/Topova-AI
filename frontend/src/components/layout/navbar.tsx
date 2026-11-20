@@ -46,7 +46,7 @@ export function Navbar() {
                 asChild
                 variant={active ? "secondary" : "ghost"}
                 size="sm"
-                className={cn("h-8 gap-1.5 px-2.5", active && "text-primary")}
+                className={cn("h-10 gap-1.5 px-3 sm:h-8 sm:px-2.5", active && "text-primary")}
               >
                 <Link to={item.to}>
                   <item.icon className="h-4 w-4 shrink-0" />
@@ -62,7 +62,7 @@ export function Navbar() {
             variant="ghost"
             size="sm"
             onClick={toggleLang}
-            className="h-8 gap-1 px-2 text-xs font-semibold"
+            className="h-10 gap-1 px-2.5 text-xs font-semibold sm:h-8 sm:px-2"
             aria-label="Toggle language"
           >
             <Globe className="h-3.5 w-3.5" />
@@ -72,7 +72,7 @@ export function Navbar() {
             variant="ghost"
             size="icon"
             onClick={toggleTheme}
-            className="h-8 w-8"
+            className="h-10 w-10 sm:h-8 sm:w-8"
             aria-label="Toggle theme"
           >
             {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
@@ -88,7 +88,7 @@ export function Navbar() {
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8"
+                className="h-10 w-10 sm:h-8 sm:w-8"
                 onClick={logout}
                 title={t("تسجيل الخروج", "Sign out")}
               >
@@ -96,7 +96,7 @@ export function Navbar() {
               </Button>
             </div>
           ) : (
-            <Button asChild size="sm" variant="outline" className="h-8 gap-1.5 px-2.5">
+            <Button asChild size="sm" variant="outline" className="h-10 gap-1.5 px-3 sm:h-8 sm:px-2.5">
               <Link to="/auth">
                 <LogIn className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">{t("دخول", "Sign in")}</span>

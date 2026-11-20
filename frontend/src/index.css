@@ -365,3 +365,18 @@
     min-width: 44px;
   }
 }
+
+/* Mobile ergonomics: 16px form controls stop iOS Safari from zooming the page on focus. */
+@media (max-width: 639px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    overscroll-behavior-y: none;
+  }
+}

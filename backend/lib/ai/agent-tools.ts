@@ -13,11 +13,29 @@ import {
   type BomEstimateReport,
 } from "@/lib/network-engine/bom";
 import { executeCliCommand } from "@/lib/network-engine/cli-emulator";
+import {
+  lookupEngineeringSpec,
+  type SpecCategory,
+} from "@/lib/network-engine/knowledge-base";
+import {
+  analyzeCapacity,
+  designParetoFrontier,
+  packVlsm,
+  planSpofElimination,
+  selectAccessSwitches,
+  type ArchitectureKind,
+} from "@/lib/network-engine/or-optimizer";
+import {
+  materializeArchitecture,
+  verifyDesign,
+  type VerificationReport,
+} from "@/lib/network-engine/or-verify";
 import { applyCopilotInstruction } from "@/lib/network-engine/copilot";
 import { planNetwork } from "@/lib/network-engine/planner";
 import { tracePacket } from "@/lib/network-engine/simulator";
 import {
   buildTopology,
+  cableFor,
   computeLayout,
 } from "@/lib/network-engine/topology-builder";
 import type {
@@ -80,6 +98,7 @@ export interface MutableContext {
   bom?: BomEstimateReport;
   cliOutput?: { deviceId: string; command: string; output: string };
   exportCards?: ChatExportCard[];
+  verification?: VerificationReport;
 }
 
 export const EXPORT_CARD_CATALOG: Record<ExportCardKind, ChatExportCard> = {
@@ -201,11 +220,39 @@ function toolLabel(name: string, ar: boolean): string {
       "تجهيز ملفات التصدير المباشرة",
       "Prepared direct deliverable files",
     ],
+    optimize_architecture: [
+      "حساب جبهة باريتو (التكلفة × التأخير × الاعتمادية)",
+      "Computed Pareto frontier (cost x latency x resilience)",
+    ],
+    optimize_hardware: [
+      "اختيار الأجهزة المثلى ضمن الميزانية",
+      "Solved budget-constrained hardware selection",
+    ],
+    analyze_capacity_n1: [
+      "تحليل السعة وفشل N-1 وطوابير M/M/1",
+      "Analyzed max-flow, N-1 failover and M/M/1 queueing",
+    ],
+    eliminate_spofs: [
+      "إزالة نقاط الفشل الأحادية بأقل تكلفة",
+      "Minimum-cost SPOF elimination",
+    ],
+    pack_vlsm: [
+      "حزم العناوين VLSM مع إثبات عدم التداخل",
+      "Packed VLSM subnets with overlap-free proof",
+    ],
+    lookup_engineering_spec: [
+      "الاستعلام من قاعدة المعرفة الهندسية الموثقة",
+      "Queried verified engineering knowledge base",
+    ],
+    verify_design: [
+      "التحقق الحتمي من التصميم",
+      "Ran deterministic design verification",
+    ],
   };
   return labels[name]?.[ar ? 0 : 1] ?? name;
 }
 
-export function executeAgentTool(
+function runCoreTool(
   name: string,
   args: Record<string, unknown>,
   ctx: MutableContext,
@@ -560,5 +607,343 @@ export function executeAgentTool(
     };
   }
 
+  if (name === "optimize_architecture") {
+    const n = (k: string, d = 0) =>
+      Math.max(0, Math.min(5000, Math.floor(Number(args[k]) || d)));
+    const req = {
+      pcs: n("pcs"),
+      servers: n("servers"),
+      aps: n("aps"),
+      cameras: n("cameras"),
+      phones: n("phones"),
+      printers: n("printers"),
+      budgetUsd: Math.max(0, Number(args.budgetUsd) || 50_000),
+      targetAvailability: Math.min(
+        0.999999,
+        Math.max(0.9, Number(args.targetAvailability) || 0.999),
+      ),
+      peakTrafficMbps:
+        typeof args.peakTrafficMbps === "number" && args.peakTrafficMbps > 0
+          ? args.peakTrafficMbps
+          : undefined,
+      vendors: (Array.isArray(args.vendors) ? args.vendors : []).filter(
+        (v): v is "Cisco" | "Ubiquiti" | "MikroTik" | "Juniper" =>
+          v === "Cisco" || v === "Ubiquiti" || v === "MikroTik" || v === "Juniper",
+      ),
+    };
+    const result = designParetoFrontier(req);
+    const kinds: ArchitectureKind[] = ["min-cost", "balanced", "max-resilience"];
+    const table = kinds.flatMap((k) => {
+      const c = result.picks[k];
+      return c
+        ? [
+            {
+              profile: k,
+              costUsd: c.costUsd,
+              latencyMs: c.latencyMs,
+              availabilityPercent: Number((c.availability * 100).toFixed(5)),
+              downtimeMinPerYear: c.downtimeMinPerYear,
+              meetsSla: c.meetsSla,
+              survivesN1: c.survivesN1,
+              coreRouters: c.coreRouters,
+              firewalls: c.firewalls,
+              ispLinks: c.ispLinks,
+              uplinkMbps: c.uplinkMbps,
+              accessSwitches: c.accessSwitches,
+            },
+          ]
+        : [];
+    });
+    let applied: string | undefined;
+    const want = String(args.apply ?? "") as ArchitectureKind;
+    const chosen = kinds.includes(want) ? result.picks[want] : undefined;
+    if (chosen) {
+      const ws = materializeArchitecture(chosen);
+      ctx.topology = ws.topology;
+      ctx.plan = ws.plan;
+      ctx.acls = ws.acls;
+      ctx.mutated = true;
+      applied = want;
+    }
+    const summary = result.feasible
+      ? `Pareto: ${result.frontier.length} non-dominated of ${result.candidatesEvaluated} candidates` +
+        (applied ? `; applied ${applied}` : "")
+      : (result.reason ?? "infeasible");
+    record(ctx, name, args, summary, Boolean(applied), ar);
+    return {
+      ok: result.feasible,
+      reason: result.reason,
+      derived: result.derived,
+      requirements: result.requirements,
+      tradeOffTable: table,
+      formulas: result.formulas,
+      applied,
+    };
+  }
+
+  if (name === "optimize_hardware") {
+    const sel = selectAccessSwitches(
+      {
+        ports: Math.max(0, Math.floor(Number(args.ports) || 0)),
+        poePorts: Math.max(0, Math.floor(Number(args.poePorts) || 0)),
+        poeWatts: Math.max(0, Number(args.poeWatts) || 0),
+        maxRackUnits:
+          typeof args.maxRackUnits === "number" ? args.maxRackUnits : undefined,
+      },
+      {
+        budgetUsd:
+          typeof args.budgetUsd === "number" ? args.budgetUsd : undefined,
+        objective:
+          args.objective === "max-resilience" ? "max-resilience" : "min-cost",
+      },
+    );
+    record(
+      ctx,
+      name,
+      args,
+      sel.feasible
+        ? `${sel.items.map((i) => `${i.quantity}x ${i.sku}`).join(" + ")} = $${sel.totalCostUsd}${sel.provenOptimal ? " (proven optimal)" : ""}`
+        : (sel.reason ?? "infeasible"),
+      false,
+      ar,
+    );
+    return { ...sel, ok: sel.feasible };
+  }
+
+  if (name === "analyze_capacity_n1") {
+    if (!ctx.topology.devices.length)
+      return { ok: false, error: "No active topology." };
+    const cap = analyzeCapacity(ctx.topology);
+    const top = cap.links
+      .slice()
+      .sort((a, b) => b.utilization - a.utilization)
+      .slice(0, 8);
+    record(
+      ctx,
+      name,
+      args,
+      `maxflow ${cap.maxFlowMbps}/${cap.totalDemandMbps} Mbps; N-1 failing ${cap.n1.failing.length}/${cap.n1.scenarios.length}; worst rho ${cap.worstUtilization}`,
+      false,
+      ar,
+    );
+    return {
+      ok: true,
+      totalDemandMbps: cap.totalDemandMbps,
+      maxFlowMbps: cap.maxFlowMbps,
+      feasible: cap.feasible,
+      minCutCapacityMbps: cap.minCutCapacityMbps,
+      bottleneckLinkIds: cap.bottleneckLinkIds,
+      worstUtilization: cap.worstUtilization,
+      kleinrockDelayMs: cap.kleinrockDelayMs,
+      hottestLinks: top,
+      n1SurvivesAll: cap.n1.survivesAll,
+      n1Failing: cap.n1.failing.slice(0, 12),
+      assumptions: cap.assumptions,
+    };
+  }
+
+  if (name === "eliminate_spofs") {
+    if (!ctx.topology.devices.length)
+      return { ok: false, error: "No active topology." };
+    const plan = planSpofElimination(ctx.topology);
+    const apply = args.apply !== false;
+    if (apply && plan.addedLinks.length) {
+      const byId = new Map(ctx.topology.devices.map((d) => [d.id, d]));
+      const stamp = Date.now().toString(36);
+      ctx.topology = {
+        ...ctx.topology,
+        connections: [
+          ...ctx.topology.connections,
+          ...plan.addedLinks.map((l, i) => {
+            const a = byId.get(l.from);
+            const b = byId.get(l.to);
+            return {
+              id: `opt${stamp}${i}`,
+              from: l.from,
+              to: l.to,
+              meta: {
+                cableType: a && b ? cableFor(a.type, b.type) : ("Fiber" as const),
+              },
+            };
+          }),
+        ],
+      };
+      ctx.mutated = true;
+    }
+    record(
+      ctx,
+      name,
+      args,
+      `${plan.addedLinks.length} link(s), $${plan.totalCostUsd}; bridges ${plan.before.bridges.length} -> ${plan.after.bridges.length}`,
+      apply && plan.addedLinks.length > 0,
+      ar,
+    );
+    return {
+      ok: true,
+      applied: apply && plan.addedLinks.length > 0,
+      addedLinks: plan.addedLinks,
+      totalCostUsd: plan.totalCostUsd,
+      lowerBoundLinks: plan.lowerBoundLinks,
+      bridgesBefore: plan.before.bridges.length,
+      bridgesAfter: plan.after.bridges.length,
+      articulationPointsAfter: plan.after.articulationPoints,
+      proof: plan.proof,
+    };
+  }
+
+  if (name === "pack_vlsm") {
+    const reqs = (Array.isArray(args.requirements) ? args.requirements : [])
+      .map((r) => ({
+        name: String((r as Record<string, unknown>)?.name ?? "").slice(0, 40),
+        hosts: Math.max(
+          1,
+          Math.floor(Number((r as Record<string, unknown>)?.hosts) || 0),
+        ),
+      }))
+      .filter((r) => r.name)
+      .slice(0, 200);
+    if (!reqs.length)
+      return { ok: false, error: "Provide requirements: [{name, hosts}]." };
+    try {
+      const out = packVlsm(
+        String(args.parent ?? "10.0.0.0/16"),
+        reqs,
+        typeof args.headroomPercent === "number" ? args.headroomPercent : 30,
+      );
+      record(
+        ctx,
+        name,
+        args,
+        `${out.allocations.length} subnets in ${out.parent}, overlap-free=${out.proof.overlapFree}, ${out.parentUtilizationPercent}% of parent`,
+        false,
+        ar,
+      );
+      return {
+        ...out,
+        ok: out.feasible,
+        allocations: out.allocations.map((a) => ({
+          name: a.name,
+          cidr: a.cidr,
+          mask: a.mask,
+          usableHosts: a.usableHosts,
+          requestedHosts: a.requestedHosts,
+          utilizationPercent: a.utilizationPercent,
+          range: `${a.firstUsable} - ${a.lastUsable}`,
+        })),
+      };
+    } catch (err) {
+      return {
+        ok: false,
+        error: err instanceof Error ? err.message : "Invalid input.",
+      };
+    }
+  }
+
+  if (name === "lookup_engineering_spec") {
+    const cats = ["hardware", "poe", "cabling", "protocol", "addressing", "hardening"];
+    const category = cats.includes(String(args.category))
+      ? (String(args.category) as SpecCategory)
+      : undefined;
+    const res = lookupEngineeringSpec(String(args.query ?? ""), category, 4);
+    record(
+      ctx,
+      name,
+      args,
+      `${res.matches.length} verified spec match(es) for "${res.query}"`,
+      false,
+      ar,
+    );
+    return { ok: true, ...res };
+  }
+
+  if (name === "verify_design") {
+    const report = verifyDesign(ctx.topology, ctx.plan, ctx.acls, {
+      faults: ctx.faults,
+      budgetUsd: typeof args.budgetUsd === "number" ? args.budgetUsd : undefined,
+    });
+    ctx.verification = report;
+    record(
+      ctx,
+      name,
+      args,
+      `${report.passed} pass / ${report.warned} warn / ${report.failed} fail`,
+      false,
+      ar,
+    );
+    return { ...report };
+  }
+
   return { ok: false, error: `Unknown tool: ${name}` };
+}
+
+function record(
+  ctx: MutableContext,
+  name: string,
+  args: Record<string, unknown>,
+  summary: string,
+  mutated: boolean,
+  ar: boolean,
+) {
+  ctx.toolCalls.push({ name, args, summary, mutated });
+  ctx.thinkingSteps.push({
+    title: toolLabel(name, ar),
+    detail: summary,
+    status: "done",
+  });
+}
+
+const MUTATING_TOOLS = new Set([
+  "generate_topology",
+  "modify_topology",
+  "auto_remediate_network",
+  "eliminate_spofs",
+  "optimize_architecture",
+]);
+
+/**
+ * Plan -> Optimize -> Verify -> Deliver: every tool that creates or changes a
+ * topology is followed by the deterministic verification suite; failing checks
+ * (with one-click remediations) are returned to the Agent.
+ */
+export function executeAgentTool(
+  name: string,
+  args: Record<string, unknown>,
+  ctx: MutableContext,
+  ar: boolean,
+): Record<string, unknown> {
+  const result = runCoreTool(name, args, ctx, ar);
+  if (
+    !MUTATING_TOOLS.has(name) ||
+    result.ok === false ||
+    !ctx.mutated ||
+    !ctx.topology.devices.length
+  ) {
+    return result;
+  }
+  const report = verifyDesign(ctx.topology, ctx.plan, ctx.acls, {
+    faults: ctx.faults,
+  });
+  ctx.verification = report;
+  ctx.thinkingSteps.push({
+    title: ar ? "التحقق الحتمي من التصميم" : "Verified design deterministically",
+    detail: `${report.passed} pass / ${report.warned} warn / ${report.failed} fail`,
+    status: "done",
+  });
+  return {
+    ...result,
+    verification: {
+      ok: report.ok,
+      passed: report.passed,
+      warned: report.warned,
+      failed: report.failed,
+      issues: report.checks
+        .filter((c) => c.status !== "pass")
+        .map((c) => ({
+          check: c.id,
+          status: c.status,
+          detail: c.detail,
+          oneClickFix: c.remediation,
+        })),
+    },
+  };
 }

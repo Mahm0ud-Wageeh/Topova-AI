@@ -334,7 +334,7 @@ export function TopologyCanvas({
         <MiniMap
           pannable
           zoomable
-          className="!rounded-xl !border !border-border/80 !bg-card/90 !shadow-lg"
+          className="!hidden !rounded-xl !border !border-border/80 !bg-card/90 !shadow-lg sm:!block"
           nodeColor={(n) => {
             const t = (n.data as StudioNodeData | undefined)?.type;
             if (t === "ROUTER") return "#3b82f6";
@@ -349,12 +349,12 @@ export function TopologyCanvas({
       </ReactFlow>
 
       {/* Top-Left Canvas Architectural Toolbar */}
-      <div className="absolute left-3 top-3 flex flex-wrap items-center gap-1 rounded-xl border bg-card/90 p-1 shadow-lg backdrop-blur-md">
+      <div className="absolute left-2 top-2 flex max-w-[calc(100%-1rem)] items-center gap-0.5 overflow-x-auto rounded-xl border bg-card/90 p-1 shadow-lg backdrop-blur-md sm:left-3 sm:top-3 sm:gap-1">
         <button
           type="button"
           onClick={() => rf?.zoomIn()}
           title="Zoom in"
-          className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+          className="hidden h-8 w-8 sm:grid place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
         >
           <ZoomIn className="h-4 w-4" />
         </button>
@@ -362,7 +362,7 @@ export function TopologyCanvas({
           type="button"
           onClick={() => rf?.zoomOut()}
           title="Zoom out"
-          className="grid h-8 w-8 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+          className="hidden h-8 w-8 sm:grid place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
         >
           <ZoomOut className="h-4 w-4" />
         </button>
@@ -445,7 +445,7 @@ export function TopologyCanvas({
       </div>
 
       {/* Bottom-Left Blueprint Legend & Mode Hint */}
-      <div className="pointer-events-none absolute bottom-3 left-3 flex flex-col gap-1.5">
+      <div className="pointer-events-none absolute bottom-2 left-2 right-2 flex flex-col items-start gap-1.5 sm:bottom-3 sm:left-3 sm:right-auto">
         {showLegend && !chaosMode && (
           <div className="hidden flex-wrap items-center gap-3 rounded-xl border bg-card/90 px-3 py-1.5 text-[10px] font-mono text-muted-foreground shadow-md backdrop-blur-md sm:flex">
             <span className="flex items-center gap-1.5">
@@ -473,8 +473,9 @@ export function TopologyCanvas({
             </span>
           ) : (
             <span className="flex items-center gap-1.5">
-              <Terminal className="h-3.5 w-3.5 text-cyan" />
-              Double-click any node for Live CLI · Drag port handles to wire cables
+              <Terminal className="h-3.5 w-3.5 shrink-0 text-cyan" />
+              <span className="sm:hidden">Double-tap a node for CLI</span>
+              <span className="hidden sm:inline">Double-click any node for Live CLI · Drag port handles to wire cables</span>
             </span>
           )}
         </div>

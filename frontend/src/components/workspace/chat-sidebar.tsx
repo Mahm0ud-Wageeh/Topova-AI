@@ -142,7 +142,7 @@ export function ChatSidebar({
                       if (e.key === "Enter") commitEdit(c.id);
                       if (e.key === "Escape") setEditingId(null);
                     }}
-                    className="h-6 flex-1 rounded border bg-background px-1.5 text-xs text-foreground focus:border-primary focus:outline-none"
+                    className="h-8 flex-1 rounded border bg-background px-1.5 text-base text-foreground focus:border-primary focus:outline-none md:h-6 md:text-xs"
                   />
                   <button
                     type="button"
@@ -183,7 +183,7 @@ export function ChatSidebar({
                     </span>
                   </button>
 
-                  <div className="flex shrink-0 items-center gap-0.5 md:hidden md:group-hover:flex md:group-focus-within:flex">
+                  <div className={`shrink-0 items-center gap-0.5 ${active ? "flex" : "hidden"} md:hidden md:group-hover:flex md:group-focus-within:flex`}>
                     <button
                       type="button"
                       onClick={() => onTogglePin(c.id, !c.pinned)}
@@ -192,29 +192,29 @@ export function ChatSidebar({
                           ? t("إلغاء التثبيت", "Unpin")
                           : t("تثبيت", "Pin")
                       }
-                      className="grid h-6 w-6 place-items-center rounded hover:bg-background/80"
+                      className="grid h-8 w-8 md:h-6 md:w-6 place-items-center rounded hover:bg-background/80"
                     >
                       {c.pinned ? (
-                        <PinOff className="h-3 w-3 text-amber-400" />
+                        <PinOff className="h-3.5 w-3.5 md:h-3 md:w-3 text-amber-400" />
                       ) : (
-                        <Pin className="h-3 w-3" />
+                        <Pin className="h-3.5 w-3.5 md:h-3 md:w-3" />
                       )}
                     </button>
                     <button
                       type="button"
                       onClick={() => startEdit(c)}
                       title={t("إعادة تسمية", "Rename")}
-                      className="grid h-6 w-6 place-items-center rounded hover:bg-background/80"
+                      className="grid h-8 w-8 md:h-6 md:w-6 place-items-center rounded hover:bg-background/80"
                     >
-                      <Pencil className="h-3 w-3" />
+                      <Pencil className="h-3.5 w-3.5 md:h-3 md:w-3" />
                     </button>
                     <button
                       type="button"
                       onClick={() => onDeleteChat(c.id)}
                       title={t("حذف", "Delete")}
-                      className="grid h-6 w-6 place-items-center rounded text-destructive/80 hover:bg-destructive/15 hover:text-destructive"
+                      className="grid h-8 w-8 md:h-6 md:w-6 place-items-center rounded text-destructive/80 hover:bg-destructive/15 hover:text-destructive"
                     >
-                      <Trash2 className="h-3 w-3" />
+                      <Trash2 className="h-3.5 w-3.5 md:h-3 md:w-3" />
                     </button>
                   </div>
                 </>

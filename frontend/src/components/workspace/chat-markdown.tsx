@@ -92,7 +92,7 @@ function CodeBlock({ lang, code }: { lang: string; code: string }) {
           {copied ? "Copied" : "Copy"}
         </button>
       </div>
-      <pre className="max-h-80 overflow-auto p-4 font-mono text-xs leading-relaxed text-zinc-200">
+      <pre className="max-h-none overflow-x-auto p-3 font-mono text-xs leading-relaxed text-zinc-200 sm:max-h-80 sm:overflow-auto sm:p-4">
         <code>{code}</code>
       </pre>
     </div>
@@ -131,7 +131,7 @@ export function ChatMarkdown({ content }: { content: string }) {
   return (
     <div
       dir={rootDir}
-      className="space-y-3 text-start text-[15px] leading-8 text-foreground/95"
+      className="space-y-3 text-start text-[15px] leading-7 text-foreground/95 sm:leading-8"
     >
       {segments.map((seg, segIdx) => {
         if (seg.type === "code") {
@@ -227,7 +227,7 @@ export function ChatMarkdown({ content }: { content: string }) {
                       {headers.map((h, hi) => (
                         <th
                           key={hi}
-                          className="px-3.5 py-2.5 text-start font-semibold text-foreground"
+                          className="min-w-[6.5rem] px-3 py-2.5 text-start align-top font-semibold text-foreground sm:px-3.5"
                         >
                           {renderInline(h)}
                         </th>
@@ -240,7 +240,7 @@ export function ChatMarkdown({ content }: { content: string }) {
                         {row.map((cell, ci) => (
                           <td
                             key={ci}
-                            className="px-3.5 py-2 text-muted-foreground"
+                            className="min-w-[6.5rem] px-3 py-2 align-top text-muted-foreground sm:px-3.5"
                           >
                             {renderInline(cell)}
                           </td>
@@ -276,7 +276,7 @@ export function ChatMarkdown({ content }: { content: string }) {
                   <li
                     key={li}
                     dir={detectTextDirection(item)}
-                    className="leading-8"
+                    className="leading-7 sm:leading-8"
                   >
                     {renderInline(item)}
                   </li>
@@ -290,7 +290,7 @@ export function ChatMarkdown({ content }: { content: string }) {
             <p
               key={i}
               dir={detectTextDirection(line)}
-              className="whitespace-pre-wrap break-words leading-8"
+              className="whitespace-pre-wrap break-words leading-7 sm:leading-8"
             >
               {renderInline(line)}
             </p>,

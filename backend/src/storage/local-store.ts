@@ -602,7 +602,7 @@ export class LocalJsonStore implements DataStore {
       conv.completedRequests = [
         ...(conv.completedRequests ?? []),
         options.requestId,
-      ];
+      ].slice(-100); // idempotency window; unbounded growth bloats every read
     if (options?.pendingProposal)
       conv.pendingProposal = options.pendingProposal;
     conv.version = (conv.version ?? 1) + 1;
@@ -642,7 +642,8 @@ export class LocalJsonStore implements DataStore {
       createdAt: new Date().toISOString(),
       snapshot: structuredClone(state),
     };
-    conv.workspaceRevisions = [revision, ...revisions];
+    // Newest first; keep the last 50 snapshots so undo history cannot grow without bound.
+    conv.workspaceRevisions = [revision, ...revisions].slice(0, 50);
   }
 
   async restoreConversation(

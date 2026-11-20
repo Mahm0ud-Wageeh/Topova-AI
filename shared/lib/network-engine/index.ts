@@ -22,4 +22,7 @@ export {
   generateGns3Project,
   generatePacketTracerBundle,
 } from "@/lib/network-engine/cisco-formats";
+export * from "@/lib/network-engine/or-optimizer";
+export { verifyDesign, materializeArchitecture } from "@/lib/network-engine/or-verify";
+export { lookupEngineeringSpec } from "@/lib/network-engine/knowledge-base";
 export * from "@/lib/network-engine/types";

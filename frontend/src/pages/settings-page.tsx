@@ -296,7 +296,7 @@ export function SettingsPage() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="[@media(pointer:coarse)]:hidden">
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2 text-sm">
                   <Keyboard className="h-4 w-4 text-muted-foreground" />

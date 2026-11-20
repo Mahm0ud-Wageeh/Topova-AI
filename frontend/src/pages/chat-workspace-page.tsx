@@ -1,4 +1,8 @@
-import { apiRequest } from "@/api/client";
+import {
+  apiRequest,
+  apiRequestStream,
+  type AgentProgressEvent,
+} from "@/api/client";
 import { TopovaMark } from "@/components/brand/topova-logo";
 import { Button } from "@/components/ui/button";
 import { ChatComposer } from "@/components/workspace/chat-composer";
@@ -150,6 +154,11 @@ export function ChatWorkspacePage() {
   const [largeScreen, setLargeScreen] = useState(
     () => window.matchMedia("(min-width: 1280px)").matches,
   );
+  // The canvas is a full-screen overlay below 1280px; never force it open there,
+  // or it covers the conversation every time a chat loads or an answer arrives.
+  const autoOpenArtifact = () => {
+    if (window.matchMedia("(min-width: 1280px)").matches) setArtifactOpen(true);
+  };
   useEffect(() => {
     const query = window.matchMedia("(min-width: 1280px)");
     const change = () => setLargeScreen(query.matches);
@@ -188,6 +197,8 @@ export function ChatWorkspacePage() {
   const [input, setInput] = useState("");
   const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
   const [sending, setSending] = useState(false);
+  const [liveStatus, setLiveStatus] = useState<string | null>(null);
+  const [liveSteps, setLiveSteps] = useState<string[]>([]);
   const [streamingMsgId, setStreamingMsgId] = useState<string | null>(null);
   const [thinkingTick, setThinkingTick] = useState(0);
   const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
@@ -290,7 +301,7 @@ export function ChatWorkspacePage() {
         setPacketTrace(null);
         setAttack(null);
         if (conversation.workspaceState?.topology?.devices?.length) {
-          setArtifactOpen(true);
+          autoOpenArtifact();
         }
       })
       .catch((error) => {
@@ -398,6 +409,8 @@ export function ChatWorkspacePage() {
     const chosenMode = modeOverride ?? mode;
     if (!overrideText) setInput("");
     setAttachments([]);
+    setLiveStatus(null);
+    setLiveSteps([]);
     setSending(true);
 
     const controller = new AbortController();
@@ -480,12 +493,20 @@ export function ChatWorkspacePage() {
         navigate(`/chat/${encodeURIComponent(targetId)}`, { replace: true });
       }
 
-      const res = await apiRequest<SendMessageResponse>(
-        `/api/v1/conversations/${encodeURIComponent(targetId)}/messages`,
+      const onProgress = (event: AgentProgressEvent) => {
+        if (abortControllerRef.current !== controller) return;
+        if (event.type === "status") setLiveStatus(event.message);
+        else
+          setLiveSteps((prev) =>
+            [...prev, event.step.title].slice(-6),
+          );
+      };
+      const res = await apiRequestStream<SendMessageResponse>(
+        `/api/v1/conversations/${encodeURIComponent(targetId)}/messages?stream=1`,
         {
-          method: "POST",
           timeoutMs: 65_000,
           signal: controller.signal,
+          onProgress,
           body: {
             requestId,
             expectedVersion: currentDetail?.version ?? 1,
@@ -517,12 +538,12 @@ export function ChatWorkspacePage() {
       if (res.result.packetTrace) {
         setPacketTrace(res.result.packetTrace);
         setAttack(null);
-        setArtifactOpen(true);
+        autoOpenArtifact();
       }
       if (res.result.attack) {
         setAttack(res.result.attack);
         setPacketTrace(null);
-        setArtifactOpen(true);
+        autoOpenArtifact();
       }
       if (res.conversation.pendingProposal) {
         setArtifactOpen(false);
@@ -533,7 +554,7 @@ export function ChatWorkspacePage() {
         !res.conversation.pendingProposal &&
         res.conversation.workspaceState
       ) {
-        setArtifactOpen(true);
+        autoOpenArtifact();
       }
 
       void loadConversations(search);
@@ -636,6 +657,16 @@ export function ChatWorkspacePage() {
   }
 
   async function handleDeleteChat(id: string) {
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm(
+        t(
+          "حذف هذه المحادثة نهائياً؟ لا يمكن التراجع.",
+          "Delete this conversation permanently? This cannot be undone.",
+        ),
+      )
+    )
+      return;
     try {
       await apiRequest(`/api/v1/conversations/${encodeURIComponent(id)}`, {
         method: "DELETE",
@@ -863,7 +894,7 @@ export function ChatWorkspacePage() {
             <Button
               size="icon"
               variant="ghost"
-              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+              className="hidden h-8 w-8 text-muted-foreground hover:text-foreground sm:inline-flex"
               onClick={() => {
                 setPaletteTab("commands");
                 setPaletteOpen(true);
@@ -1024,7 +1055,7 @@ export function ChatWorkspacePage() {
                           className={`flex gap-3 sm:gap-4 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                         >
                           {msg.role === "assistant" && (
-                            <TopovaMark size={30} className="mt-1" />
+                            <TopovaMark size={30} className="mt-1 hidden sm:block" />
                           )}
 
                           <div
@@ -1096,7 +1127,7 @@ export function ChatWorkspacePage() {
                                           {msg.cliOutput.command}
                                         </span>
                                       </div>
-                                      <pre className="max-h-60 overflow-auto p-4 font-mono text-xs text-zinc-200">
+                                      <pre className="max-h-none overflow-x-auto p-3 font-mono text-xs text-zinc-200 sm:max-h-60 sm:overflow-auto sm:p-4">
                                         {msg.cliOutput.output}
                                       </pre>
                                     </div>
@@ -1302,12 +1333,29 @@ export function ChatWorkspacePage() {
 
                     {sending && (
                       <div className="flex items-start gap-3">
-                        <TopovaMark size={30} className="animate-pulse" />
+                        <TopovaMark size={30} className="hidden animate-pulse sm:block" />
                         <div className="flex-1 space-y-2 pt-1">
-                          <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/5 px-3.5 py-1.5 text-xs font-medium text-primary">
+                          <div
+                            role="status"
+                            aria-live="polite"
+                            className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/5 px-3.5 py-1.5 text-xs font-medium text-primary"
+                          >
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            <span>{thinkingPhases[thinkingTick]}</span>
+                            <span>{liveStatus ?? thinkingPhases[thinkingTick]}</span>
                           </div>
+                          {liveSteps.length > 0 && (
+                            <ul className="space-y-1 ps-1 text-[11px] text-muted-foreground">
+                              {liveSteps.map((s, i) => (
+                                <li
+                                  key={`${i}-${s}`}
+                                  className="flex items-center gap-1.5 animate-in fade-in"
+                                >
+                                  <Check className="h-3 w-3 shrink-0 text-emerald-500" />
+                                  <span>{s}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
                         </div>
                       </div>
                     )}
@@ -1328,7 +1376,9 @@ export function ChatWorkspacePage() {
                     <div
                       role="status"
                       aria-live="polite"
-                      className="flex items-center gap-2 px-4 py-2 text-xs text-muted-foreground"
+                      className={`flex-wrap items-center gap-2 px-4 py-1.5 text-xs text-muted-foreground sm:py-2 ${
+                        save.status === "saved" ? "hidden sm:flex" : "flex"
+                      }`}
                     >
                       <span>
                         {save.status === "saving"
@@ -1384,7 +1434,7 @@ export function ChatWorkspacePage() {
                   </div>
                 )}
                 {/* Bottom Docked Floating Glass Composer */}
-                <div className="shrink-0 px-3 pb-4 pt-2 sm:px-6">
+                <div className="shrink-0 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-1.5 sm:px-6 sm:pb-4 sm:pt-2">
                   <ChatComposer
                     centered={false}
                     artifactOpen={artifactOpen}

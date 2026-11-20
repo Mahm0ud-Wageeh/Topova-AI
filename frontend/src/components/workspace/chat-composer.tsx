@@ -103,6 +103,9 @@ export function ChatComposer({
   const { t } = useLanguage();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [modeMenuOpen, setModeMenuOpen] = useState(false);
+  const [isPhone] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(max-width: 639px)").matches,
+  );
   const [dragging, setDragging] = useState(false);
 
   useEffect(() => {
@@ -256,7 +259,9 @@ export function ChatComposer({
 
       {engineMode && (
         <p
-          className="mb-2 text-xs leading-relaxed text-muted-foreground"
+          className={`mb-2 text-xs leading-relaxed text-muted-foreground ${
+            centered ? "" : "hidden sm:block"
+          }`}
           role="status"
         >
           {engineMode === "local"
@@ -284,14 +289,21 @@ export function ChatComposer({
       >
         <textarea
           aria-label={t("رسالتك", "Your message")}
-          rows={centered ? 3 : 2}
+          rows={centered ? 3 : isPhone ? 1 : 2}
           dir="auto"
           value={input}
           disabled={sending}
           onPaste={handlePaste}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
+            // On touch devices Enter must insert a new line (there is no Shift key);
+            // sending happens with the send button.
+            if (
+              e.key === "Enter" &&
+              !e.shiftKey &&
+              !e.nativeEvent.isComposing &&
+              !window.matchMedia("(pointer: coarse)").matches
+            ) {
               e.preventDefault();
               void onSend();
             }
@@ -366,9 +378,18 @@ export function ChatComposer({
               </button>
 
               {modeMenuOpen && (
+                <>
+                  {/* Outside tap closes the menu (essential on touch screens). */}
+                  <button
+                    type="button"
+                    aria-label={t("إغلاق", "Close")}
+                    tabIndex={-1}
+                    onClick={() => setModeMenuOpen(false)}
+                    className="fixed inset-0 z-30 cursor-default bg-black/30 sm:bg-transparent"
+                  />
                 <div
-                  className={`glass-panel absolute start-0 z-30 w-64 rounded-2xl p-1.5 ${
-                    centered ? "top-10" : "bottom-10"
+                  className={`glass-panel !bg-card/95 fixed inset-x-3 bottom-3 z-40 rounded-2xl p-1.5 shadow-2xl sm:absolute sm:inset-x-auto sm:start-0 sm:w-64 ${
+                    centered ? "sm:bottom-auto sm:top-10" : "sm:bottom-10"
                   }`}
                 >
                   {WORK_MODES.map((m) => (
@@ -395,6 +416,7 @@ export function ChatComposer({
                     </button>
                   ))}
                 </div>
+                </>
               )}
             </div>
           </div>

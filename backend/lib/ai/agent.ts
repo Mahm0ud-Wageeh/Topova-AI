@@ -51,7 +51,14 @@ export interface AgentNetworkState {
   faults?: FaultState;
 }
 
+/** Live progress emitted while the agent works (drives SSE streaming). */
+export type AgentProgressEvent =
+  | { type: "status"; message: string }
+  | { type: "step"; step: ThinkingStep };
+
 export interface AgentChatRequest {
+  /** Optional live progress sink; never required for correctness. */
+  onProgress?: (event: AgentProgressEvent) => void;
   message: string;
   history?: AgentChatMessage[];
   state?: AgentNetworkState;
@@ -298,6 +305,129 @@ const AGENT_TOOLS = [
       required: ["target"],
     },
   },
+  {
+    type: "function" as const,
+    name: "optimize_architecture",
+    description:
+      "Operations-Research Pareto designer: from device counts, USD budget cap and target availability SLA, compute mathematically non-dominated Min-Cost / Balanced / Max-Resilience architectures with exact cost, M/M/1 latency and downtime figures. Set `apply` to materialise one as the live topology.",
+    parameters: {
+      type: "object",
+      properties: {
+        pcs: { type: "integer" },
+        servers: { type: "integer" },
+        aps: { type: "integer" },
+        cameras: { type: "integer" },
+        phones: { type: "integer" },
+        printers: { type: "integer" },
+        budgetUsd: { type: "number", description: "Hard CAPEX cap in USD." },
+        targetAvailability: {
+          type: "number",
+          description: "e.g. 0.999 or 0.9999.",
+        },
+        peakTrafficMbps: { type: "number" },
+        vendors: {
+          type: "array",
+          items: { type: "string", enum: ["Cisco", "Ubiquiti", "MikroTik", "Juniper"] },
+          description:
+            "Restrict hardware to these vendors (e.g. ['Cisco'] when the user wants a Cisco/Packet Tracer lab).",
+        },
+        apply: {
+          type: "string",
+          enum: ["min-cost", "balanced", "max-resilience"],
+          description:
+            "Only when the user explicitly asks to apply/build one of the options.",
+        },
+      },
+      required: ["budgetUsd"],
+    },
+  },
+  {
+    type: "function" as const,
+    name: "optimize_hardware",
+    description:
+      "Exact branch-and-bound knapsack: pick access-switch SKUs from the verified catalog satisfying port count, PoE ports, PoE wattage and rack units at minimum cost (or smallest failure domain) under a hard budget.",
+    parameters: {
+      type: "object",
+      properties: {
+        ports: { type: "integer" },
+        poePorts: { type: "integer" },
+        poeWatts: { type: "number" },
+        maxRackUnits: { type: "integer" },
+        budgetUsd: { type: "number" },
+        objective: { type: "string", enum: ["min-cost", "max-resilience"] },
+      },
+      required: ["ports"],
+    },
+  },
+  {
+    type: "function" as const,
+    name: "analyze_capacity_n1",
+    description:
+      "On the active topology: Edmonds-Karp max-flow / min-cut bottleneck links, per-link M/M/1 utilization and delay, Kleinrock mean delay, and exhaustive N-1 single-link / single-device failure survival.",
+    parameters: { type: "object", properties: {} },
+  },
+  {
+    type: "function" as const,
+    name: "eliminate_spofs",
+    description:
+      "Tarjan bridge/articulation analysis plus provably minimum-link 2-edge-connected augmentation. Adds the cheapest redundant links so no single link failure disconnects the network. Set apply=false for a dry run.",
+    parameters: {
+      type: "object",
+      properties: { apply: { type: "boolean" } },
+    },
+  },
+  {
+    type: "function" as const,
+    name: "pack_vlsm",
+    description:
+      "Provable VLSM subnet packing inside a parent CIDR with growth headroom; returns overlap-free / aligned / contained proof and exact utilization.",
+    parameters: {
+      type: "object",
+      properties: {
+        parent: { type: "string", description: "e.g. 10.0.0.0/16" },
+        headroomPercent: { type: "number" },
+        requirements: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              name: { type: "string" },
+              hosts: { type: "integer" },
+            },
+            required: ["name", "hosts"],
+          },
+        },
+      },
+      required: ["requirements"],
+    },
+  },
+  {
+    type: "function" as const,
+    name: "lookup_engineering_spec",
+    description:
+      "Query the verified engineering knowledge base (Cisco/Ubiquiti/MikroTik/Juniper SKUs, IEEE 802.3af/at/bt PoE, cable max distances and attenuation, STP/HSRP/OSPF timers, RFC 1918/CIDR, CIS/NIST hardening mapped to IOS/ASA CLI). ALWAYS use this instead of recalling specs from memory.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: { type: "string" },
+        category: {
+          type: "string",
+          enum: ["hardware", "poe", "cabling", "protocol", "addressing", "hardening"],
+        },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    type: "function" as const,
+    name: "verify_design",
+    description:
+      "Run the deterministic verification suite on the active topology: connectivity, VLSM overlap proof, N-1 failover, PoE wattage, queueing bottleneck, security score and optional budget.",
+    parameters: {
+      type: "object",
+      properties: { budgetUsd: { type: "number" } },
+    },
+  },
 ];
 
 function buildSystemInstruction(
@@ -359,7 +489,9 @@ ${languageDirective}
 
 CAPABILITIES & DELIVERABLE GUIDANCE:
 - You can converse naturally and brilliantly about ANY topic: general questions, computer networking (CCNA/CCNP/CCIE), subnetting math, cybersecurity, software engineering, graduation project documentation, troubleshooting, or career advice.
-- You possess 9 live deterministic network engineering tools: topology generation, incremental editing, 0-100 security audit, auto-remediation, packet tracing, Red-Team attack simulation, BOM/PoE estimation, live Cisco IOS CLI, and direct file export preparation (\`prepare_file_export\`).
+- You possess 16 live deterministic network engineering tools: topology generation, incremental editing, 0-100 security audit, auto-remediation, packet tracing, Red-Team attack simulation, BOM/PoE estimation, live Cisco IOS CLI, direct file export preparation (\`prepare_file_export\`), plus an Operations-Research core: \`optimize_architecture\` (Pareto cost/latency/resilience), \`optimize_hardware\` (exact knapsack), \`analyze_capacity_n1\` (max-flow/min-cut, M/M/1, N-1), \`eliminate_spofs\` (minimum-link augmentation), \`pack_vlsm\` (overlap-free proof), \`lookup_engineering_spec\` (verified knowledge base) and \`verify_design\`.
+- PLAN -> OPTIMIZE -> VERIFY -> DELIVER: for sizing, budget, redundancy, capacity or SLA questions call the OR tools and quote their exact numbers; NEVER estimate costs, wattage, distances or availability from memory (use \`lookup_engineering_spec\`). Topology-changing tools return a \`verification\` block: if it lists failed checks, either fix them with the suggested \`oneClickFix\` tool or state the exact numeric trade-off and offer the fix. Prices are approximate street ranges, so say so. Every hardware spec carries a \`verification\` status (verified / partial / unverified, with sources): when you recommend a SKU whose status is not "verified", tell the engineer to confirm that figure on the vendor datasheet and cite the \`note\`.
+- MATHEMATICAL PROOF MODE: when the user asks for the proof, brief or "show the math", present formulas (\`rho = lambda/mu\`, \`W = 1/(mu - lambda)\`, \`A = Π A_i\`, parallel \`1-(1-A)^k\`, max-flow = min-cut), the inputs used, and the resulting numbers from the tool output, in a short Executive Engineering Brief.
 - Use tools whenever the user asks to design, build, change, audit, fix, simulate, price, inspect, or export files for a network. Do NOT call topology tools for purely conceptual questions or casual greetings.
 - FILE EXPORTS & CISCO PACKET TRACER (.pkt / .ptk):
   * Whenever the user asks for a Packet Tracer file (.pkt / .ptk), Cisco configs (.cfg), CML (.yaml), GNS3 (.gns3), cabling CSV, or PDF report, ALWAYS call \`prepare_file_export\` so direct 1-click download cards appear right below your message!
@@ -373,8 +505,12 @@ INTERACTIVE METADATA BLOCK (ALWAYS APPEND AT THE VERY END OF YOUR RESPONSE):
 After your final markdown answer, append a single hidden JSON block wrapped in <nettopo_meta>...</nettopo_meta> containing:
 1. "followUps": an array of 3 concise, high-value follow-up questions/prompts in ${responseLang === "ar" ? "ARABIC" : "ENGLISH"} that the user can click next.
 2. "clarifyingQuestions": OPTIONAL array (0 to 2 items) ONLY when the user's request is broad/open-ended and asking quick multiple-choice questions would help refine their network or task. Each item: {"question":"...","options":["...","...","..."]}.
-Example:
-<nettopo_meta>{"followUps":["افحص أمان الشبكة وأصلح الثغرات","احسب ميزانية طاقة PoE والتكلفة","جهّز ملفات Cisco Packet Tracer للتحميل"],"clarifyingQuestions":[]}</nettopo_meta>`;
+Example (write the values in ${responseLang === "ar" ? "ARABIC" : "ENGLISH"} only, never in the other language):
+${
+  responseLang === "ar"
+    ? `<nettopo_meta>{"followUps":["افحص أمان الشبكة وأصلح الثغرات","احسب ميزانية طاقة PoE والتكلفة","جهّز ملفات Cisco Packet Tracer للتحميل"],"clarifyingQuestions":[]}</nettopo_meta>`
+    : `<nettopo_meta>{"followUps":["Audit the network security and fix the findings","Estimate the PoE budget and cost","Prepare the Cisco Packet Tracer files for download"],"clarifyingQuestions":[]}</nettopo_meta>`
+}`;
 }
 
 export function createDefaultAgentState(): AgentNetworkState {
@@ -432,6 +568,8 @@ export function detectMessageLanguage(
   const arCount = message.match(/[\u0600-\u06FF]/g)?.length ?? 0;
   // Strip common technical/CLI tokens (Cisco, OSPF, VLAN, .pkt, show ip route, IPs) before counting English prose letters
   const stripped = message
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/`[^`]*`/g, " ")
     .replace(
       /\b(cisco|packet|tracer|ospf|eigrp|bgp|rip|vlan|vlans|acl|acls|poe|nvr|cctv|gns3|cml|ios|cli|tcp|udp|icmp|ipv4|ipv6|ip|pc\d*|r\d+|sw\d+|fw\d+|srv\d+|cam\d+|ap\d+|show|ping|traceroute|route|brief|interface|interfaces|running-config|startup-config|access-lists|version|neighbors|status)\b/gi,
       "",
@@ -439,6 +577,13 @@ export function detectMessageLanguage(
     .replace(/\.[a-z0-9]{2,5}\b/gi, "");
   const enCount = stripped.match(/[a-zA-Z]/g)?.length ?? 0;
 
+  // Word-level majority decides mixed messages: an English sentence that merely
+  // quotes one Arabic name stays English, while an Arabic sentence that mentions
+  // "firewall" or "routers" stays Arabic.
+  const arWords = stripped.match(/[؀-ۿ]+/g)?.length ?? 0;
+  const enWords = stripped.match(/[a-zA-Z]{3,}/g)?.length ?? 0;
+  if (arCount >= 2 && arWords > 0 && arWords >= enWords) return "ar";
+  if (enWords > arWords && enCount >= 3) return "en";
   if (arCount >= 2) return "ar";
   if (enCount >= 3 && arCount === 0) return "en";
 
@@ -709,6 +854,51 @@ function runLocalFallbackAgent(
         ? ["صمم شبكة بها راوتر وسويتش و4 أجهزة كمبيوتر"]
         : ["Design 1 router, 1 switch and 4 PCs"],
       mutated: false,
+    };
+  }
+
+  if (
+    /(n-?1\b|failover|bottleneck|max.?flow|min.?cut|capacity|spof|verify|تحقق|اختناق|سعة|فشل)/.test(
+      lower,
+    ) &&
+    !/(eliminate spof|remove spof|أزل نقاط|ازل نقاط)/.test(lower)
+  ) {
+    const cap = executeAgentTool("analyze_capacity_n1", {}, ctx, ar);
+    const ver = executeAgentTool("verify_design", {}, ctx, ar);
+    const failing = (cap.n1Failing as { label: string; servedPercent: number }[]) ?? [];
+    const failedChecks = (ver.checks as { status: string; title: string; detail: string }[]).filter(
+      (c) => c.status !== "pass",
+    );
+    return {
+      reply: ar
+        ? `نتائج التحليل الرياضي الحتمي:\n- أقصى تدفق (Max-Flow): **${cap.maxFlowMbps} / ${cap.totalDemandMbps} Mbps**\n- أعلى استخدام للروابط (ρ): **${cap.worstUtilization}**\n- فشل N-1: **${cap.n1SurvivesAll ? "كل الأعطال الفردية محتملة" : `${failing.length} سيناريو يفقد جزءاً من الحركة`}**\n${failedChecks.map((c) => `- ⚠️ ${c.title}: ${c.detail}`).join("\n")}\n\nاطلب "أزل نقاط الفشل الأحادية" لإضافة أقل عدد من الروابط الاحتياطية.`
+        : `Deterministic analysis results:\n- Max-flow: **${cap.maxFlowMbps} / ${cap.totalDemandMbps} Mbps**\n- Worst link utilization (rho): **${cap.worstUtilization}**\n- N-1 failover: **${cap.n1SurvivesAll ? "survives every single failure" : `${failing.length} scenario(s) lose traffic`}**\n${failedChecks.map((c) => `- ⚠️ ${c.title}: ${c.detail}`).join("\n")}\n\nAsk me to "eliminate SPOFs" to add the minimum number of redundant links.`,
+      engineLabel: "Topova Intelligence",
+      mode,
+      thinkingSteps: ctx.thinkingSteps,
+      toolCalls: ctx.toolCalls,
+      followUpSuggestions: ar
+        ? ["أزل نقاط الفشل الأحادية بأقل تكلفة", "افحص أمان الشبكة", "احسب ميزانية PoE والتكلفة"]
+        : ["Eliminate single points of failure at minimum cost", "Run a security audit", "Estimate BOM & PoE budget"],
+      mutated: false,
+    };
+  }
+
+  if (/(eliminate spof|remove spof|أزل نقاط|ازل نقاط)/.test(lower)) {
+    const res = executeAgentTool("eliminate_spofs", {}, ctx, ar);
+    return {
+      reply: ar
+        ? `أضفت **${(res.addedLinks as unknown[]).length}** رابط احتياطي بتكلفة تقديرية **$${res.totalCostUsd}** (الحد الأدنى النظري ${res.lowerBoundLinks}). الجسور قبل: ${res.bridgesBefore}، بعد: ${res.bridgesAfter}.`
+        : `Added **${(res.addedLinks as unknown[]).length}** redundant link(s), est. **$${res.totalCostUsd}** (theoretical minimum ${res.lowerBoundLinks}). Bridges before: ${res.bridgesBefore}, after: ${res.bridgesAfter}.`,
+      engineLabel: "Topova Intelligence",
+      mode,
+      thinkingSteps: ctx.thinkingSteps,
+      toolCalls: ctx.toolCalls,
+      followUpSuggestions: buildSmartFollowUps(ar, ctx),
+      mutated: ctx.mutated,
+      nextState: ctx.mutated
+        ? { topology: ctx.topology, plan: ctx.plan, acls: ctx.acls }
+        : undefined,
     };
   }
 
@@ -991,8 +1181,19 @@ export async function runNetworkAgentChat(
       response.nextState.acls = generateZeroTrustAcls(response.nextState.plan);
     }
     if (attachments) response.reply += `\n\n${attachments}`;
+    for (const step of response.thinkingSteps)
+      req.onProgress?.({ type: "step", step });
     return response;
   };
+  let emitted = 0;
+  const flushSteps = (c: MutableContext) => {
+    while (emitted < c.thinkingSteps.length)
+      req.onProgress?.({ type: "step", step: c.thinkingSteps[emitted++] });
+  };
+  req.onProgress?.({
+    type: "status",
+    message: ar ? "تحليل الطلب وسياق الشبكة" : "Analyzing request & workspace",
+  });
   const apiKey = process.env.GEMINI_API_KEY?.trim();
   if (!apiKey) {
     return localResponse();
@@ -1103,6 +1304,12 @@ export async function runNetworkAgentChat(
       ],
     };
 
+    emitted = 0;
+    flushSteps(attemptCtx);
+    req.onProgress?.({
+      type: "status",
+      message: ar ? "الاتصال بمحرك التفكير الهندسي" : "Reasoning with the engineering core",
+    });
     try {
       let interaction = await withTimeout(
         ai.interactions.create(
@@ -1118,17 +1325,22 @@ export async function runNetworkAgentChat(
         "agent-turn",
       );
 
-      for (let round = 0; round < 4; round++) {
+      for (let round = 0; round < 6; round++) {
         const calls = extractFunctionCalls(interaction);
         if (calls.length === 0) break;
 
         const results = calls.map((call) => {
+          req.onProgress?.({
+            type: "status",
+            message: ar ? `تشغيل الأداة: ${call.name}` : `Running tool: ${call.name}`,
+          });
           const out = executeAgentTool(
             call.name,
             call.arguments,
             attemptCtx,
             ar,
           );
+          flushSteps(attemptCtx);
           return {
             type: "function_result" as const,
             call_id: call.id,
@@ -1166,6 +1378,7 @@ export async function runNetworkAgentChat(
             : "Synthesized structured technical response",
         status: "done",
       });
+      flushSteps(attemptCtx);
 
       const rawOutput =
         extractOutputText(interaction) ||

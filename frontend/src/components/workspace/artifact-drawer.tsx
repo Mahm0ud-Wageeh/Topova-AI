@@ -1,10 +1,11 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   Activity,
   Calculator,
   Download,
   Flame,
+  FlaskConical,
   ImageDown,
   Maximize2,
   Minimize2,
@@ -28,6 +29,8 @@ import {
   tracePacket,
 } from "@/lib/network-engine";
 import type { AttackSimulationResult } from "@/lib/network-engine/attack-sim";
+import { planSpofElimination, type ArchitectureCandidate } from "@/lib/network-engine/or-optimizer";
+import { materializeArchitecture } from "@/lib/network-engine/or-verify";
 import type { TrafficProfile } from "@/lib/network-engine/traffic";
 import type {
   FaultState,
@@ -36,6 +39,7 @@ import type {
 } from "@/lib/network-engine/types";
 import { CliTerminalModal } from "@/components/studio/cli-terminal-modal";
 import { BomCostPanel, SecurityAuditPanel } from "@/components/studio/engineering-panels";
+import { OrLabPanel } from "@/components/studio/or-lab-panel";
 import { IpPlanPanel } from "@/components/studio/output-panels";
 import { AttackSimulatorPanel, PacketSimulatorPanel, TrafficLoadPanel } from "@/components/studio/simulator-panels";
 import { TopologyCanvas } from "@/components/studio/topology-canvas";
@@ -44,7 +48,7 @@ import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/context/language-context";
 import type { ConversationWorkspaceState } from "./workspace-types";
 
-type DrawerTab = "canvas" | "audit" | "packet" | "attack" | "traffic" | "bom" | "ipplan";
+type DrawerTab = "canvas" | "audit" | "packet" | "attack" | "traffic" | "bom" | "ipplan" | "orlab";
 
 interface ArtifactDrawerProps {
   workspace: ConversationWorkspaceState;
@@ -75,6 +79,13 @@ export function ArtifactDrawer({
   const canvasBoxRef = useRef<HTMLDivElement>(null);
 
   const [tab, setTab] = useState<DrawerTab>("canvas");
+  const tabStripRef = useRef<HTMLDivElement>(null);
+  // Keep the active tab visible in the horizontally scrolling strip on small screens.
+  useEffect(() => {
+    tabStripRef.current
+      ?.querySelector<HTMLElement>('[data-active="true"]')
+      ?.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
+  }, [tab]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [cliDeviceId, setCliDeviceId] = useState<string | null>(null);
   const [chaosMode, setChaosMode] = useState(false);
@@ -171,6 +182,47 @@ export function ArtifactDrawer({
     toast.success(`${t("تم الربط:", "Connected")} ${from} ↔ ${to}`);
   }
 
+  function applyArchitecture(candidate: ArchitectureCandidate) {
+    const next = materializeArchitecture(candidate);
+    onWorkspaceChange({ ...workspace, topology: next.topology, plan: next.plan, acls: next.acls });
+    setTab("canvas");
+    toast.success(t("تم تطبيق التصميم المُحسَّن.", "Optimized architecture applied."));
+  }
+
+  function eliminateSpofs() {
+    const result = planSpofElimination(workspace.topology);
+    if (result.addedLinks.length === 0) {
+      toast.info(t("لا توجد نقاط فشل أحادية للإزالة.", "No single points of failure to remove."));
+      return;
+    }
+    const stamp = Date.now().toString(36);
+    onWorkspaceChange({
+      ...workspace,
+      topology: {
+        ...workspace.topology,
+        connections: [
+          ...workspace.topology.connections,
+          ...result.addedLinks.map((l, i) => {
+            const a = workspace.topology.devices.find((d) => d.id === l.from);
+            const b = workspace.topology.devices.find((d) => d.id === l.to);
+            return {
+              id: `opt${stamp}${i}`,
+              from: l.from,
+              to: l.to,
+              meta: { cableType: a && b ? cableFor(a.type, b.type) : ("Fiber" as const) },
+            };
+          }),
+        ],
+      },
+    });
+    toast.success(
+      t(
+        `أُضيفت ${result.addedLinks.length} روابط احتياطية ($${result.totalCostUsd}).`,
+        `Added ${result.addedLinks.length} redundant link(s) ($${result.totalCostUsd}).`,
+      ),
+    );
+  }
+
   function handleAutoRemediate() {
     const fixed = autoRemediateTopology(workspace.topology, workspace.plan, workspace.acls);
     onWorkspaceChange({
@@ -190,6 +242,7 @@ export function ArtifactDrawer({
     { id: "traffic", label: t("الأحمال", "Traffic"), icon: Activity },
     { id: "bom", label: t("التكلفة", "BOM/PoE"), icon: Calculator },
     { id: "ipplan", label: t("العناوين", "IP/VLAN"), icon: Table2 },
+    { id: "orlab", label: t("مختبر التحسين", "OR Lab"), icon: FlaskConical },
   ];
 
   return (
@@ -221,7 +274,7 @@ export function ArtifactDrawer({
           <Button
             size="icon"
             variant="outline"
-            className="h-7 w-7"
+            className="h-9 w-9 sm:h-7 sm:w-7"
             disabled={exportingPng}
             onClick={() => void handleExportPng()}
             title={t("حفظ المخطط كصورة PNG عالية الدقة", "Download High-DPI PNG Blueprint")}
@@ -242,13 +295,13 @@ export function ArtifactDrawer({
           <Button
             size="sm"
             variant="default"
-            className="h-7 gap-1 px-2.5 text-[11px]"
+            className="h-9 gap-1 px-3 text-[11px] sm:h-7 sm:px-2.5"
             onClick={onOpenExport}
           >
             <Download className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Packet Tracer</span>
           </Button>
-          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onClose} title={t("إغلاق اللوحة", "Close panel")}>
+          <Button size="icon" variant="ghost" className="h-9 w-9 sm:h-7 sm:w-7" onClick={onClose} title={t("إغلاق اللوحة", "Close panel")}>
             <X className="h-4 w-4" />
           </Button>
         </div>
@@ -256,13 +309,14 @@ export function ArtifactDrawer({
 
       {/* Tool Strip Tabs */}
       <div className="flex shrink-0 items-center justify-between gap-1 overflow-x-auto border-b bg-background/60 px-2 py-1.5">
-        <div className="flex items-center gap-1">
+        <div ref={tabStripRef} className="flex items-center gap-1">
           {tabs.map((item) => (
             <button
               key={item.id}
+              data-active={tab === item.id}
               type="button"
               onClick={() => setTab(item.id)}
-              className={`flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold transition-colors ${
+              className={`flex shrink-0 items-center gap-1 rounded-lg px-2.5 py-2 text-[11px] font-semibold transition-colors sm:px-2 sm:py-1 ${
                 tab === item.id
                   ? "bg-primary/15 text-primary"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -391,6 +445,15 @@ export function ArtifactDrawer({
             )}
             {tab === "bom" && <BomCostPanel bom={bom} />}
             {tab === "ipplan" && <IpPlanPanel plan={workspace.plan} />}
+            {tab === "orlab" && (
+              <OrLabPanel
+                topology={workspace.topology}
+                plan={workspace.plan}
+                acls={workspace.acls}
+                onApplyArchitecture={applyArchitecture}
+                onEliminateSpofs={eliminateSpofs}
+              />
+            )}
           </div>
         )}
       </div>

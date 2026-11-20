@@ -44,9 +44,9 @@ export function DesignReview({
   return (
     <details
       open={proposal ? true : undefined}
-      className="mx-3 mb-2 max-h-[40dvh] overflow-auto rounded-xl border bg-card p-3 sm:mx-6"
+      className="mx-3 mb-1.5 max-h-[40dvh] overflow-auto rounded-xl border bg-card p-2.5 sm:mx-6 sm:mb-2 sm:p-3"
     >
-      <summary className="cursor-pointer text-sm font-semibold">
+      <summary className="cursor-pointer text-xs font-semibold sm:text-sm">
         {proposal
           ? t(
               "راجع تعديلات الذكاء الاصطناعي قبل التطبيق",

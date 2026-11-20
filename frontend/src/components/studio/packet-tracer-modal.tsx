@@ -331,9 +331,9 @@ export function PacketTracerExportModal({
       onClose={onClose}
       label="Export network design"
     >
-      <div className="glass-panel flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl">
+      <div className="glass-panel flex max-h-[92dvh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl sm:max-h-[90vh]">
         {/* Modal Header */}
-        <div className="flex items-center justify-between gap-3 border-b border-border/60 px-5 py-4">
+        <div className="flex items-center justify-between gap-3 border-b border-border/60 px-3 py-3 sm:px-5 sm:py-4">
           <div className="flex items-center gap-3 min-w-0">
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground shadow-sm">
               <Network className="h-5 w-5" />
@@ -370,7 +370,7 @@ export function PacketTracerExportModal({
 
         <section
           aria-label={t("فحص جاهزية التصدير", "Export readiness checks")}
-          className="max-h-44 shrink-0 overflow-auto border-b p-4 text-xs"
+          className="max-h-[30dvh] shrink-0 overflow-auto border-b p-3 text-xs sm:max-h-44 sm:p-4"
         >
           <p className="font-semibold">
             {preflight.ready
@@ -425,8 +425,8 @@ export function PacketTracerExportModal({
           </label>
         </section>
         {/* Mode Switcher: Packet Tracer First + Secondary Advanced Labs */}
-        <div className="flex items-center justify-between border-b bg-muted/30 px-5 py-2">
-          <div className="flex gap-1.5">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-muted/30 px-3 py-2 sm:px-5">
+          <div className="flex flex-wrap gap-1.5">
             <button
               type="button"
               onClick={() => setActiveTab("packet-tracer")}
@@ -455,7 +455,7 @@ export function PacketTracerExportModal({
           </div>
           <Button
             size="sm"
-            className="gap-1.5"
+            className="w-full gap-1.5 sm:w-auto"
             disabled={busy !== null || !exportAllowed}
             onClick={() => void downloadPacketTracerPack()}
           >
@@ -470,7 +470,7 @@ export function PacketTracerExportModal({
         </div>
 
         {/* Modal Body */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-5">
+        <div className="flex-1 space-y-4 overflow-y-auto p-3 sm:space-y-5 sm:p-5">
           {activeTab === "packet-tracer" ? (
             <>
               {/* Quick Guide Callout */}
