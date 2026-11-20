@@ -1,3 +1,4 @@
+import { UserAvatar } from "@/components/auth/user-avatar";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -227,7 +228,12 @@ export function ChatSidebar({
   }
 
   return (
-    <div className="glass-panel flex h-full flex-col overflow-hidden rounded-2xl">
+    <div
+      className={`glass-panel flex h-full flex-col overflow-hidden rounded-2xl ${
+        // The slide-over drawer sits on top of the chat: it must be opaque or the page shows through.
+        onCloseMobile ? "!bg-background !bg-none" : ""
+      }`}
+    >
       {/* Top Brand + New Chat */}
       <div className="shrink-0 space-y-2.5 border-b border-border/50 p-3">
         <div className="flex items-center justify-between gap-2">
@@ -351,11 +357,12 @@ export function ChatSidebar({
             to="/profile"
             className="flex min-w-0 flex-1 items-center gap-2.5 rounded-xl p-1.5 transition-colors hover:bg-muted"
           >
-            <span
-              className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br ${avatarBg} font-display text-xs font-bold text-white shadow`}
-            >
-              {initials}
-            </span>
+            <UserAvatar
+              initials={initials}
+              gradientClass={avatarBg}
+              name={displayName}
+              className="h-9 w-9 shrink-0 rounded-xl text-xs"
+            />
             <div className="min-w-0 flex-1">
               <p className="truncate text-xs font-bold text-foreground">
                 {displayName}

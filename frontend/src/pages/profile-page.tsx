@@ -1,3 +1,4 @@
+import { UserAvatar } from "@/components/auth/user-avatar";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
@@ -90,11 +91,12 @@ export function ProfilePage() {
         {/* Profile Hero Banner */}
         <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border bg-gradient-to-r from-primary/10 via-card to-cyan/10 p-6">
           <div className="flex items-center gap-4">
-            <div
-              className={`grid h-16 w-16 shrink-0 place-items-center rounded-2xl bg-gradient-to-br ${activeBg} font-display text-2xl font-bold text-white shadow-lg`}
-            >
-              {initials}
-            </div>
+            <UserAvatar
+              initials={initials}
+              gradientClass={activeBg}
+              name={displayName}
+              className="h-16 w-16 shrink-0 rounded-2xl text-2xl"
+            />
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="font-display text-2xl font-bold">{displayName || t("مهندس شبكات", "Network Engineer")}</h1>

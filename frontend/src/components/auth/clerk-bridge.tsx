@@ -4,6 +4,7 @@ import {
   useAuth as useClerkAuth,
   useClerk,
   useSignIn,
+  useUser,
 } from "@clerk/clerk-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
@@ -11,6 +12,7 @@ import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { TopovaMark } from "@/components/brand/topova-logo";
 import { Button } from "@/components/ui/button";
+import { setAvatarUrl } from "@/components/auth/avatar-store";
 import { useAuth } from "@/context/auth-context";
 import { useLanguage } from "@/context/language-context";
 import { ONBOARDING_STORAGE_KEY } from "@/pages/home-page";
@@ -56,8 +58,15 @@ export function GoogleLogo({ className = "h-4 w-4" }: { className?: string }) {
 function ClerkSessionBridge() {
   const { isLoaded, isSignedIn, getToken } = useClerkAuth();
   const clerk = useClerk();
+  const { user: clerkUser } = useUser();
   const { user, loading: authLoading, syncClerkSession } = useAuth();
   const syncingRef = useRef(false);
+
+  // Publish the Google profile photo so the sidebar and profile page can show it.
+  useEffect(() => {
+    if (!isLoaded) return;
+    setAvatarUrl(isSignedIn && clerkUser?.hasImage ? clerkUser.imageUrl : null);
+  }, [isLoaded, isSignedIn, clerkUser?.imageUrl, clerkUser?.hasImage]);
 
   useEffect(() => {
     const onLogout = () => {

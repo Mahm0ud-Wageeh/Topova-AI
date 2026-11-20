@@ -849,7 +849,7 @@ export function ChatWorkspacePage() {
             />
           </motion.div>
           <div
-            className="flex-1 bg-black/40 backdrop-blur-sm"
+            className="flex-1 bg-black/60 backdrop-blur-md"
             onClick={() => setMobileSidebarOpen(false)}
           />
         </div>
