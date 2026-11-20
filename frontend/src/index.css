@@ -360,9 +360,13 @@
 }
 
 @media (pointer: coarse) {
-  button, [role="button"], select {
+  /* 44px touch targets everywhere except controls that carry their own hit area (.touch-compact). */
+  button:not(.touch-compact), [role="button"]:not(.touch-compact), select {
     min-height: 44px;
     min-width: 44px;
+  }
+  .touch-compact {
+    min-height: 44px;
   }
 }
 
